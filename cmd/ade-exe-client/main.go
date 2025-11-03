@@ -165,10 +165,11 @@ func readResponse(conn net.Conn) {
 	}
 	log.Printf("[DEBUG] Header received: %s (%d bytes)", string(header), n)
 
-	// Read attrs block until \n\n
+	// Read attrs block and check for body: header
 	attrs := strings.Builder{}
 	body := strings.Builder{}
-	inAttrs := true
+	hasBody := false
+	seenBodyHeader := false
 
 	for {
 		line, err := reader.ReadString('\n')
@@ -182,46 +183,53 @@ func readResponse(conn net.Conn) {
 			break
 		}
 
-		if inAttrs {
-			if line == "\n" {
-				// Check if next byte is also \n (end of attrs block)
-				peek, peekErr := reader.Peek(1)
-				if peekErr == nil && len(peek) > 0 && peek[0] == '\n' {
+		// Check if this is the body: header
+		if strings.TrimSpace(line) == "body:" {
+			seenBodyHeader = true
+			hasBody = true
+			log.Printf("[DEBUG] Found body: header")
+			// Continue to read body content (don't add body: to attrs or body)
+			continue
+		}
+
+		// Check for end of response marker (\n\n)
+		if line == "\n" {
+			peek, peekErr := reader.Peek(1)
+			if peekErr == nil && len(peek) > 0 {
+				if peek[0] == '\n' {
 					// Skip the second \n
 					reader.ReadByte()
-					log.Printf("[DEBUG] End of attrs block")
-					inAttrs = false
-					// Check if there's body data to read
-					peek, peekErr = reader.Peek(1)
-					if peekErr != nil || len(peek) == 0 {
-						// No body, response complete
-						break
-					}
-					continue
+					log.Printf("[DEBUG] End of response marker (\n\n) found")
+					// Response ends here (with or without body)
+					break
 				}
-				// Single \n in attrs block - save it
-				attrs.WriteString(line)
-				continue
+				// Check if next line might be body: header
+				// Peek ahead to see if next line is "body:"
+				peekBytes, peekErr := reader.Peek(6) // "body:" + "\n" = 6 bytes
+				if peekErr == nil && len(peekBytes) >= 5 {
+					peekLine := string(peekBytes[:5])
+					if peekLine == "body:" {
+						// This blank line is part of headers, save it
+						attrs.WriteString(line)
+						continue
+					}
+				}
 			}
+			// Single \n in headers or body - save it
+			if !seenBodyHeader {
+				attrs.WriteString(line)
+			} else {
+				body.WriteString(line)
+			}
+			continue
+		}
+
+		if !seenBodyHeader {
+			// Still reading headers
 			attrs.WriteString(line)
 		} else {
-			// Reading body - read until no more data available
+			// Reading body content
 			body.WriteString(line)
-			// Try to peek to see if there's more data (may block, but server sends all at once)
-			peek, peekErr := reader.Peek(1)
-			if peekErr == io.EOF {
-				// EOF reached, response complete
-				break
-			}
-			if peekErr != nil {
-				// Some other error, stop reading
-				log.Printf("[DEBUG] Peek error (may indicate end of response): %v", peekErr)
-				break
-			}
-			if len(peek) == 0 {
-				// No more data available, response complete
-				break
-			}
 		}
 	}
 
@@ -229,8 +237,8 @@ func readResponse(conn net.Conn) {
 
 	// Build full response for logging
 	fullResponse := attrs.String()
-	if body.Len() > 0 {
-		fullResponse += body.String()
+	if hasBody {
+		fullResponse += "body:\n" + body.String()
 	}
 
 	// Log response
@@ -238,7 +246,8 @@ func readResponse(conn net.Conn) {
 
 	// Print response to stdout
 	fmt.Print(attrs.String())
-	if body.Len() > 0 {
+	if hasBody {
+		fmt.Print("body:\n")
 		fmt.Print(body.String())
 	}
 }

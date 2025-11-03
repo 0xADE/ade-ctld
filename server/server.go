@@ -285,7 +285,7 @@ func (s *Server) handleList(conn net.Conn) {
 		entriesToShow = filtered
 	}
 
-	attrs.WriteString("\n")
+	attrs.WriteString("\nbody:\n")
 
 	body := strings.Builder{}
 	for _, entry := range entriesToShow {
@@ -298,7 +298,7 @@ func (s *Server) handleList(conn net.Conn) {
 		body.WriteString(fmt.Sprintf("%d %s\n", entry.ID, name))
 	}
 
-	s.writeResponse(conn, attrs.String()+body.String())
+	s.writeResponse(conn, attrs.String()+body.String()+"\n\n")
 	log.Printf("[DEBUG] List response sent")
 }
 
@@ -360,7 +360,7 @@ func (s *Server) handleListNext(conn net.Conn, cmd *parser.Command) {
 		attrs.WriteString(fmt.Sprintf("list-next: %d %d\n", end, limitSize))
 	}
 
-	attrs.WriteString("\n")
+	attrs.WriteString("\nbody:\n")
 
 	body := strings.Builder{}
 	for _, entry := range entriesToShow {
@@ -373,7 +373,7 @@ func (s *Server) handleListNext(conn net.Conn, cmd *parser.Command) {
 		body.WriteString(fmt.Sprintf("%d %s\n", entry.ID, name))
 	}
 
-	s.writeResponse(conn, attrs.String()+body.String())
+	s.writeResponse(conn, attrs.String()+body.String()+"\n\n")
 	log.Printf("[DEBUG] list-next response sent (offset: %d, limit: %d, shown: %d)", offset, limitSize, len(entriesToShow))
 }
 
@@ -546,6 +546,7 @@ func (s *Server) matchesPathFilter(entry *indexer.Entry, filter FilterExpr) bool
 }
 
 // writeResponse writes a response with TXT01 header
+// Response string should already contain \n\n at the end to mark end of response
 func (s *Server) writeResponse(conn net.Conn, response string) {
 	log.Printf("[DEBUG] Writing response (length: %d bytes)", len(response))
 	header := []byte("TXT01")
