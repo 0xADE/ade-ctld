@@ -16,13 +16,14 @@ func main() {
 	if len(os.Args) < 2 {
 		fmt.Fprintf(os.Stderr, "Usage: %s <command> [args...]\n", os.Args[0])
 		fmt.Fprintf(os.Stderr, "Commands:\n")
-		fmt.Fprintf(os.Stderr, "  list                 - List all applications\n")
-		fmt.Fprintf(os.Stderr, "  filter-name <name>   - Filter by name\n")
-		fmt.Fprintf(os.Stderr, "  filter-cat <cat>     - Filter by category\n")
-		fmt.Fprintf(os.Stderr, "  reset-filters        - Reset all filters\n")
-		fmt.Fprintf(os.Stderr, "  run <id>             - Run application by ID\n")
-		fmt.Fprintf(os.Stderr, "  lang <locale>        - Set language\n")
-		fmt.Fprintf(os.Stderr, "  interactive          - Interactive mode\n")
+		fmt.Fprintf(os.Stderr, "  list                     - List all applications\n")
+		fmt.Fprintf(os.Stderr, "  list-next <offset> [limit] - Get next page of results\n")
+		fmt.Fprintf(os.Stderr, "  filter-name <name>       - Filter by name\n")
+		fmt.Fprintf(os.Stderr, "  filter-cat <cat>         - Filter by category\n")
+		fmt.Fprintf(os.Stderr, "  reset-filters            - Reset all filters\n")
+		fmt.Fprintf(os.Stderr, "  run <id>                 - Run application by ID\n")
+		fmt.Fprintf(os.Stderr, "  lang <locale>            - Set language\n")
+		fmt.Fprintf(os.Stderr, "  interactive              - Interactive mode\n")
 		os.Exit(1)
 	}
 
@@ -74,6 +75,12 @@ func main() {
 	switch cmd {
 	case "list":
 		sendCommand(conn, "list", nil)
+	case "list-next":
+		if len(os.Args) < 3 {
+			fmt.Fprintf(os.Stderr, "Usage: %s list-next <offset> [limit_size]\n", os.Args[0])
+			os.Exit(1)
+		}
+		sendIntCommand(conn, "list-next", os.Args[2:])
 	case "filter-name":
 		if len(os.Args) < 3 {
 			fmt.Fprintf(os.Stderr, "Usage: %s filter-name <name>\n", os.Args[0])
@@ -107,6 +114,11 @@ func main() {
 
 	// Read and print response
 	readResponse(conn)
+	
+	// Close connection and exit in non-interactive mode
+	log.Printf("[DEBUG] Closing connection and exiting")
+	conn.Close()
+	os.Exit(0)
 }
 
 func sendCommand(conn net.Conn, cmdName string, args []string) {
@@ -115,6 +127,21 @@ func sendCommand(conn net.Conn, cmdName string, args []string) {
 	// Send arguments
 	for _, arg := range args {
 		fmt.Fprintf(conn, `"%s`, arg)
+		conn.Write([]byte{'\n'})
+	}
+
+	// Send command
+	conn.Write([]byte(cmdName))
+	conn.Write([]byte{'\n'})
+	log.Printf("[DEBUG] Command sent")
+}
+
+func sendIntCommand(conn net.Conn, cmdName string, args []string) {
+	log.Printf("[DEBUG] Sending command: %s with %d int args", cmdName, len(args))
+	
+	// Send integer arguments without quotes
+	for _, arg := range args {
+		fmt.Fprintf(conn, "%s", arg)
 		conn.Write([]byte{'\n'})
 	}
 
@@ -138,10 +165,10 @@ func readResponse(conn net.Conn) {
 	}
 	log.Printf("[DEBUG] Header received: %s (%d bytes)", string(header), n)
 
-	// Read attrs block
-	inAttrs := true
+	// Read attrs block until \n\n
 	attrs := strings.Builder{}
 	body := strings.Builder{}
+	inAttrs := true
 
 	for {
 		line, err := reader.ReadString('\n')
@@ -157,22 +184,61 @@ func readResponse(conn net.Conn) {
 
 		if inAttrs {
 			if line == "\n" {
-				log.Printf("[DEBUG] End of attrs block")
-				inAttrs = false
+				// Check if next byte is also \n (end of attrs block)
+				peek, peekErr := reader.Peek(1)
+				if peekErr == nil && len(peek) > 0 && peek[0] == '\n' {
+					// Skip the second \n
+					reader.ReadByte()
+					log.Printf("[DEBUG] End of attrs block")
+					inAttrs = false
+					// Check if there's body data to read
+					peek, peekErr = reader.Peek(1)
+					if peekErr != nil || len(peek) == 0 {
+						// No body, response complete
+						break
+					}
+					continue
+				}
+				// Single \n in attrs block - save it
+				attrs.WriteString(line)
 				continue
 			}
 			attrs.WriteString(line)
 		} else {
+			// Reading body - read until no more data available
 			body.WriteString(line)
+			// Try to peek to see if there's more data (may block, but server sends all at once)
+			peek, peekErr := reader.Peek(1)
+			if peekErr == io.EOF {
+				// EOF reached, response complete
+				break
+			}
+			if peekErr != nil {
+				// Some other error, stop reading
+				log.Printf("[DEBUG] Peek error (may indicate end of response): %v", peekErr)
+				break
+			}
+			if len(peek) == 0 {
+				// No more data available, response complete
+				break
+			}
 		}
 	}
 
 	log.Printf("[DEBUG] Response received - attrs: %d bytes, body: %d bytes", attrs.Len(), body.Len())
 
-	// Print response
+	// Build full response for logging
+	fullResponse := attrs.String()
+	if body.Len() > 0 {
+		fullResponse += body.String()
+	}
+
+	// Log response
+	log.Printf("[RESPONSE] %s", fullResponse)
+
+	// Print response to stdout
 	fmt.Print(attrs.String())
 	if body.Len() > 0 {
-		fmt.Print("\n")
 		fmt.Print(body.String())
 	}
 }

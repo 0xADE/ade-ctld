@@ -32,6 +32,7 @@ type (
 		Terminal   string `envconfig:"ADE_DEFAULT_TERM"`
 		UnixSocket string `envconfig:"ADE_INDEXD_SOCK"`
 		Workers    int    `envconfig:"ADE_INDEXD_WORKERS" default:"4"`
+		ListLimit  int    `envconfig:"ADE_INDEXD_LIST_LIMIT" default:"128"`
 	}
 	rc struct {
 		sync.RWMutex
@@ -225,6 +226,14 @@ func (c *config) Workers() int {
 		return 4 // Default
 	}
 	return c.static.Workers
+}
+
+// ListLimit returns the configured list limit
+func (c *config) ListLimit() int {
+	if c.static.ListLimit <= 0 {
+		return 128 // Default
+	}
+	return c.static.ListLimit
 }
 
 func expandPath(path string) string {
