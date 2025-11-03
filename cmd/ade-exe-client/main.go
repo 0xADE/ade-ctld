@@ -1,0 +1,299 @@
+package main
+
+import (
+	"bufio"
+	"fmt"
+	"io"
+	"log"
+	"net"
+	"os"
+	"strings"
+
+	"github.com/0xADE/ade-ctld/internal/config"
+)
+
+func main() {
+	if len(os.Args) < 2 {
+		fmt.Fprintf(os.Stderr, "Usage: %s <command> [args...]\n", os.Args[0])
+		fmt.Fprintf(os.Stderr, "Commands:\n")
+		fmt.Fprintf(os.Stderr, "  list                     - List all applications\n")
+		fmt.Fprintf(os.Stderr, "  list-next <offset> [limit] - Get next page of results\n")
+		fmt.Fprintf(os.Stderr, "  filter-name <name>       - Filter by name\n")
+		fmt.Fprintf(os.Stderr, "  filter-cat <cat>         - Filter by category\n")
+		fmt.Fprintf(os.Stderr, "  reset-filters            - Reset all filters\n")
+		fmt.Fprintf(os.Stderr, "  run <id>                 - Run application by ID\n")
+		fmt.Fprintf(os.Stderr, "  lang <locale>            - Set language\n")
+		fmt.Fprintf(os.Stderr, "  interactive              - Interactive mode\n")
+		os.Exit(1)
+	}
+
+	// Initialize config to get socket path
+	if err := config.Init(); err != nil {
+		fmt.Fprintf(os.Stderr, "Failed to initialize config: %v\n", err)
+		os.Exit(1)
+	}
+
+	cfg := config.Get()
+	socketPath := cfg.UnixSocket()
+
+	// Expand socket path
+	if strings.HasPrefix(socketPath, "~") {
+		home, err := os.UserHomeDir()
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Failed to get home directory: %v\n", err)
+			os.Exit(1)
+		}
+		socketPath = strings.Replace(socketPath, "~", home, 1)
+	}
+
+	// Connect to socket
+	log.Printf("[DEBUG] Connecting to socket: %s", socketPath)
+	conn, err := net.Dial("unix", socketPath)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Failed to connect to socket %s: %v\n", socketPath, err)
+		os.Exit(1)
+	}
+	defer conn.Close()
+	log.Printf("[DEBUG] Connected successfully")
+
+	cmd := os.Args[1]
+
+	if cmd == "interactive" {
+		runInteractive(conn)
+		return
+	}
+
+	// Send header
+	log.Printf("[DEBUG] Sending header TXT01")
+	_, err = conn.Write([]byte("TXT01"))
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Failed to send header: %v\n", err)
+		os.Exit(1)
+	}
+
+	// Execute command
+	switch cmd {
+	case "list":
+		sendCommand(conn, "list", nil)
+	case "list-next":
+		if len(os.Args) < 3 {
+			fmt.Fprintf(os.Stderr, "Usage: %s list-next <offset> [limit_size]\n", os.Args[0])
+			os.Exit(1)
+		}
+		sendIntCommand(conn, "list-next", os.Args[2:])
+	case "filter-name":
+		if len(os.Args) < 3 {
+			fmt.Fprintf(os.Stderr, "Usage: %s filter-name <name>\n", os.Args[0])
+			os.Exit(1)
+		}
+		sendCommand(conn, "+filter-name", []string{os.Args[2]})
+	case "filter-cat":
+		if len(os.Args) < 3 {
+			fmt.Fprintf(os.Stderr, "Usage: %s filter-cat <category>\n", os.Args[0])
+			os.Exit(1)
+		}
+		sendCommand(conn, "+filter-cat", []string{os.Args[2]})
+	case "reset-filters":
+		sendCommand(conn, "0filters", nil)
+	case "run":
+		if len(os.Args) < 3 {
+			fmt.Fprintf(os.Stderr, "Usage: %s run <id>\n", os.Args[0])
+			os.Exit(1)
+		}
+		sendCommand(conn, "run", []string{os.Args[2]})
+	case "lang":
+		if len(os.Args) < 3 {
+			fmt.Fprintf(os.Stderr, "Usage: %s lang <locale>\n", os.Args[0])
+			os.Exit(1)
+		}
+		sendCommand(conn, "lang", []string{os.Args[2]})
+	default:
+		fmt.Fprintf(os.Stderr, "Unknown command: %s\n", cmd)
+		os.Exit(1)
+	}
+
+	// Read and print response
+	readResponse(conn)
+	
+	// Close connection and exit in non-interactive mode
+	log.Printf("[DEBUG] Closing connection and exiting")
+	conn.Close()
+	os.Exit(0)
+}
+
+func sendCommand(conn net.Conn, cmdName string, args []string) {
+	log.Printf("[DEBUG] Sending command: %s with %d args", cmdName, len(args))
+	
+	// Send arguments
+	for _, arg := range args {
+		fmt.Fprintf(conn, `"%s`, arg)
+		conn.Write([]byte{'\n'})
+	}
+
+	// Send command
+	conn.Write([]byte(cmdName))
+	conn.Write([]byte{'\n'})
+	log.Printf("[DEBUG] Command sent")
+}
+
+func sendIntCommand(conn net.Conn, cmdName string, args []string) {
+	log.Printf("[DEBUG] Sending command: %s with %d int args", cmdName, len(args))
+	
+	// Send integer arguments without quotes
+	for _, arg := range args {
+		fmt.Fprintf(conn, "%s", arg)
+		conn.Write([]byte{'\n'})
+	}
+
+	// Send command
+	conn.Write([]byte(cmdName))
+	conn.Write([]byte{'\n'})
+	log.Printf("[DEBUG] Command sent")
+}
+
+func readResponse(conn net.Conn) {
+	log.Printf("[DEBUG] Reading response...")
+	reader := bufio.NewReader(conn)
+
+	// Read header
+	header := make([]byte, 5)
+	n, err := io.ReadFull(reader, header)
+	if err != nil {
+		log.Printf("[ERROR] Failed to read header: %v (read %d bytes)", err, n)
+		fmt.Fprintf(os.Stderr, "Failed to read response header: %v\n", err)
+		return
+	}
+	log.Printf("[DEBUG] Header received: %s (%d bytes)", string(header), n)
+
+	// Read attrs block until \n\n
+	attrs := strings.Builder{}
+	body := strings.Builder{}
+	inAttrs := true
+
+	for {
+		line, err := reader.ReadString('\n')
+		if err == io.EOF {
+			log.Printf("[DEBUG] EOF reached")
+			break
+		}
+		if err != nil {
+			log.Printf("[ERROR] Read error: %v", err)
+			fmt.Fprintf(os.Stderr, "Read error: %v\n", err)
+			break
+		}
+
+		if inAttrs {
+			if line == "\n" {
+				// Check if next byte is also \n (end of attrs block)
+				peek, peekErr := reader.Peek(1)
+				if peekErr == nil && len(peek) > 0 && peek[0] == '\n' {
+					// Skip the second \n
+					reader.ReadByte()
+					log.Printf("[DEBUG] End of attrs block")
+					inAttrs = false
+					// Check if there's body data to read
+					peek, peekErr = reader.Peek(1)
+					if peekErr != nil || len(peek) == 0 {
+						// No body, response complete
+						break
+					}
+					continue
+				}
+				// Single \n in attrs block - save it
+				attrs.WriteString(line)
+				continue
+			}
+			attrs.WriteString(line)
+		} else {
+			// Reading body - read until no more data available
+			body.WriteString(line)
+			// Try to peek to see if there's more data (may block, but server sends all at once)
+			peek, peekErr := reader.Peek(1)
+			if peekErr == io.EOF {
+				// EOF reached, response complete
+				break
+			}
+			if peekErr != nil {
+				// Some other error, stop reading
+				log.Printf("[DEBUG] Peek error (may indicate end of response): %v", peekErr)
+				break
+			}
+			if len(peek) == 0 {
+				// No more data available, response complete
+				break
+			}
+		}
+	}
+
+	log.Printf("[DEBUG] Response received - attrs: %d bytes, body: %d bytes", attrs.Len(), body.Len())
+
+	// Build full response for logging
+	fullResponse := attrs.String()
+	if body.Len() > 0 {
+		fullResponse += body.String()
+	}
+
+	// Log response
+	log.Printf("[RESPONSE] %s", fullResponse)
+
+	// Print response to stdout
+	fmt.Print(attrs.String())
+	if body.Len() > 0 {
+		fmt.Print(body.String())
+	}
+}
+
+func runInteractive(conn net.Conn) {
+	scanner := bufio.NewScanner(os.Stdin)
+
+	// Send header
+	conn.Write([]byte("TXT01"))
+
+	fmt.Println("Interactive mode. Type commands or 'exit' to quit.")
+	fmt.Print("> ")
+
+	for scanner.Scan() {
+		line := strings.TrimSpace(scanner.Text())
+
+		if line == "exit" || line == "quit" {
+			break
+		}
+
+		if line == "" {
+			fmt.Print("> ")
+			continue
+		}
+
+		// Parse command
+		parts := strings.Fields(line)
+		if len(parts) == 0 {
+			fmt.Print("> ")
+			continue
+		}
+
+		cmd := parts[0]
+		args := parts[1:]
+
+		// Send command
+		for _, arg := range args {
+			if strings.HasPrefix(arg, `"`) {
+				conn.Write([]byte(arg))
+			} else {
+				conn.Write([]byte(`"` + arg))
+			}
+			conn.Write([]byte{'\n'})
+		}
+
+		conn.Write([]byte(cmd))
+		conn.Write([]byte{'\n'})
+
+		// Read response
+		readResponse(conn)
+
+		fmt.Print("> ")
+	}
+
+	if err := scanner.Err(); err != nil {
+		fmt.Fprintf(os.Stderr, "Error reading input: %v\n", err)
+	}
+}
