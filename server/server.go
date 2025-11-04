@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"syscall"
 
 	"github.com/0xADE/ade-ctld/internal/config"
 	"github.com/0xADE/ade-ctld/internal/indexer"
@@ -416,6 +417,11 @@ func (s *Server) handleRun(conn net.Conn, cmd *parser.Command) {
 		}
 		execCmd = exec.Command(parts[0], parts[1:]...)
 		log.Printf("[DEBUG] Executing: %v", parts)
+	}
+
+	// Detach the process from the parent session to prevent terminal blocking
+	execCmd.SysProcAttr = &syscall.SysProcAttr{
+		Setpgid: true,
 	}
 
 	err := execCmd.Start()
