@@ -22,18 +22,18 @@ It supports binary or text representation. Well, text format only really support
 ## Commands
 
 ### +filter-name
-*Arguments:* Arbitrary number of arguments of types <str> or <bool>
-*Sets filename filter by which applications are searched in PATH. Both the direct filename and its headers from desktop files are considered in the name. String arguments are treated as search terms, while boolean arguments control the logical operation (OR, AND, NOT) for combining multiple search terms.*
+*Arguments:* Arbitrary number of arguments of types `<str>` or `<bool>`
+*Sets filename filter by which applications are searched in PATH. Both the direct filename and its headers from desktop files are considered in the name. String arguments are treated as search terms, while boolean arguments (`t`, `f`, `or`, `and`, `not`) control the logical operation for combining multiple search terms. By default, multiple string arguments are combined with OR logic.*
 *Returns:* cmd: +filter-name, status: 0
 
 ### +filter-cat
-*Arguments:* Arbitrary number of <str> arguments and optional <bool> arguments
-*Add arguments from string parameters as category filters. By default, multiple categories are combined with AND logic, unless OR boolean argument is explicitly provided.*
+*Arguments:* Arbitrary number of `<str>` arguments and optional `<bool>` arguments
+*Add arguments from string parameters as category filters. By default, multiple categories are combined with AND logic, unless OR boolean argument (`or`, `t`) is explicitly provided. Boolean literals (`t`/`f`) and operators (`or`, `and`, `not`) can be used to control logical operations.*
 *Returns:* cmd: +filter-cat, status: 0
 
 ### +filter-path
-*Arguments:* Arbitrary number of <str> arguments and optional <bool> arguments
-*Add arguments from string parameters as path filters. By default, multiple paths are combined with OR logic, unless AND boolean argument is explicitly provided.*
+*Arguments:* Arbitrary number of `<str>` arguments and optional `<bool>` arguments
+*Add arguments from string parameters as path filters. By default, multiple paths are combined with OR logic, unless AND boolean argument (`and`, `f`) is explicitly provided. Boolean literals (`t`/`f`) and operators (`or`, `and`, `not`) can be used to control logical operations.*
 *Returns:* cmd: +filter-path, status: 0
 
 ### 0filters
@@ -47,18 +47,18 @@ It supports binary or text representation. Well, text format only really support
 *Returns:* len: <total_count>, limited: <displayed_count> (if limited), offset: <offset> (if paginated), list-next: <next_offset> <limit> (if more items available), followed by body containing ID-name pairs
 
 ### list-next
-*Arguments:* offset <int> (required), limit <int> (optional)
-*Return next portion of entries from the current filter set starting from the specified offset. If limit is not provided, uses the default list limit from configuration.*
+*Arguments:* offset `<int>` (required), limit `<int>` (optional)
+*Return next portion of entries from the current filter set starting from the specified offset. Integer arguments are passed without quotes. If limit is not provided, uses the default list limit from configuration.*
 *Returns:* len: <total_count>, limited: <displayed_count>, offset: <current_offset>, list-next: <next_offset> <limit> (if more items available), followed by body containing ID-name pairs
 
 ### run
-*Arguments:* id <int> (required)
-*Run application by ID from the index database. The application is executed either directly or in a terminal if specified in its desktop entry.*
+*Arguments:* id `<int>` (required)
+*Run application by ID from the index database. The ID argument is passed as an integer (without quotes). The application is executed either directly or in a terminal if specified in its desktop entry.*
 *Returns:* cmd: run, idx: <application_id>, status: <execution_status>, pid: <process_id>
 
 ### lang
-*Arguments:* isolang <str> (required)
-*Set preferred language for returning localized results (for example, when selecting localizations returned from desktop files).*
+*Arguments:* isolang `<str>` (required)
+*Set preferred language for returning localized results (for example, when selecting localizations returned from desktop files). The language code argument is passed as a string (with `"` prefix).*
 *Returns:* cmd: lang, status: 0, lang: <language_code>
 
 ## Fort Style
@@ -66,11 +66,14 @@ It supports binary or text representation. Well, text format only really support
 Uses reverse Polish notation for commands and arguments.
 
 - Any argument followed by 0A (ASCII LF)
-- Any string argument prefixed with ", type <str>
+- Argument type detection:
+  - **String** (`<str>`): Arguments prefixed with `"` are treated as strings. The prefix is included in transmission.
+  - **Boolean literal** (`<bool>`): Arguments `t` (true) or `f` (false) are treated as boolean values, passed without prefix.
+  - **Boolean operator** (`<bool>`): Keywords `or`, `and`, `not` are treated as boolean operators, passed without prefix. These control logical operations when combining multiple filter arguments.
+  - **Integer** (`<int>`): If an argument consists entirely of digits (without prefix), it is treated as an integer.
+  - **Unrecognized**: Any other argument is treated as a string and automatically prefixed with `"` by the client.
 - Comment lines started with # are ignored
 - Empty commands (consecutive 0A) are ignored and reflected in the listing as blank lines
-- Logical operators or, and, not (these are not strings, passed without prefix "), type <bool>
-- Numbers are also passed without " (type <int>)
 
 ### Examples
 
@@ -93,6 +96,17 @@ saveconf
 "viewers
 and
 +filter-cat
+
+# Example with boolean literal (true = OR operation)
+"graphics
+"viewers
+t
++filter-cat
+
+# Example with integer argument (no quotes needed)
+10
+20
+list-next
 
 # Return list of names (headers for UI list + id) matching current filter
 list

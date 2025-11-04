@@ -7,6 +7,7 @@ import (
 	"log"
 	"net"
 	"os"
+	"strconv"
 	"strings"
 
 	"github.com/0xADE/ade-ctld/internal/config"
@@ -80,7 +81,7 @@ func main() {
 			fmt.Fprintf(os.Stderr, "Usage: %s list-next <offset> [limit_size]\n", os.Args[0])
 			os.Exit(1)
 		}
-		sendIntCommand(conn, "list-next", os.Args[2:])
+		sendCommand(conn, "list-next", os.Args[2:])
 	case "filter-name":
 		if len(os.Args) < 3 {
 			fmt.Fprintf(os.Stderr, "Usage: %s filter-name <name>\n", os.Args[0])
@@ -121,27 +122,48 @@ func main() {
 	os.Exit(0)
 }
 
+// formatArgument formats an argument according to its type
+// Returns the formatted string to send (without newline)
+func formatArgument(arg string) string {
+	arg = strings.TrimSpace(arg)
+	
+	// If starts with ", it's a string (keep prefix)
+	if strings.HasPrefix(arg, `"`) {
+		return arg
+	}
+	
+	// Check for boolean literals
+	if arg == "t" {
+		return "t"
+	}
+	if arg == "f" {
+		return "f"
+	}
+	
+	// Check for recognized keywords (boolean operators)
+	keywords := []string{"or", "and", "not"}
+	for _, kw := range keywords {
+		if arg == kw {
+			return arg
+		}
+	}
+	
+	// Check if it's numeric (all digits)
+	if _, err := strconv.ParseInt(arg, 10, 64); err == nil {
+		return arg
+	}
+	
+	// Default: treat as string (add prefix)
+	return `"` + arg
+}
+
 func sendCommand(conn net.Conn, cmdName string, args []string) {
 	log.Printf("[DEBUG] Sending command: %s with %d args", cmdName, len(args))
 	
-	// Send arguments
+	// Send arguments with type detection
 	for _, arg := range args {
-		fmt.Fprintf(conn, `"%s`, arg)
-		conn.Write([]byte{'\n'})
-	}
-
-	// Send command
-	conn.Write([]byte(cmdName))
-	conn.Write([]byte{'\n'})
-	log.Printf("[DEBUG] Command sent")
-}
-
-func sendIntCommand(conn net.Conn, cmdName string, args []string) {
-	log.Printf("[DEBUG] Sending command: %s with %d int args", cmdName, len(args))
-	
-	// Send integer arguments without quotes
-	for _, arg := range args {
-		fmt.Fprintf(conn, "%s", arg)
+		formatted := formatArgument(arg)
+		fmt.Fprintf(conn, "%s", formatted)
 		conn.Write([]byte{'\n'})
 	}
 
@@ -283,13 +305,10 @@ func runInteractive(conn net.Conn) {
 		cmd := parts[0]
 		args := parts[1:]
 
-		// Send command
+		// Send command with type detection
 		for _, arg := range args {
-			if strings.HasPrefix(arg, `"`) {
-				conn.Write([]byte(arg))
-			} else {
-				conn.Write([]byte(`"` + arg))
-			}
+			formatted := formatArgument(arg)
+			conn.Write([]byte(formatted))
 			conn.Write([]byte{'\n'})
 		}
 
