@@ -45,12 +45,12 @@ func Init() error {
 	var err error
 	once.Do(func() {
 		globalConfig = &config{}
-		
+
 		// Load environment variables
 		if err = envconfig.Process("", &globalConfig.static); err != nil {
 			return
 		}
-		
+
 		// Set default socket path if not provided
 		if globalConfig.static.UnixSocket == "" {
 			currentUser, err := user.Current()
@@ -59,7 +59,7 @@ func Init() error {
 			}
 			globalConfig.static.UnixSocket = fmt.Sprintf("/tmp/ade-%s/indexd", currentUser.Uid)
 		}
-		
+
 		// Expand tilde in socket path
 		if strings.HasPrefix(globalConfig.static.UnixSocket, "~") {
 			home, err := os.UserHomeDir()
@@ -68,12 +68,12 @@ func Init() error {
 			}
 			globalConfig.static.UnixSocket = strings.Replace(globalConfig.static.UnixSocket, "~", home, 1)
 		}
-		
+
 		// Load rc file
 		if err = globalConfig.loadRC(); err != nil {
 			return
 		}
-		
+
 		// Setup file watcher
 		if err = globalConfig.setupWatcher(); err != nil {
 			return
@@ -89,7 +89,7 @@ func Run() error {
 			return err
 		}
 	}
-	
+
 	go globalConfig.watchLoop()
 	return nil
 }
@@ -104,13 +104,13 @@ func Get() *config {
 
 func (c *config) loadRC() error {
 	rcPath := expandPath(idxrc)
-	
+
 	// Create directory if it doesn't exist
 	rcDir := filepath.Dir(rcPath)
-	if err := os.MkdirAll(rcDir, 0755); err != nil {
+	if err := os.MkdirAll(rcDir, 0750); err != nil {
 		return err
 	}
-	
+
 	// Try to read rc file
 	file, err := os.Open(rcPath)
 	if err != nil {
@@ -126,10 +126,10 @@ func (c *config) loadRC() error {
 		return err
 	}
 	defer file.Close()
-	
+
 	c.dynamic.Lock()
 	defer c.dynamic.Unlock()
-	
+
 	c.dynamic.additionalPaths = []string{}
 	scanner := bufio.NewScanner(file)
 	for scanner.Scan() {
@@ -141,7 +141,7 @@ func (c *config) loadRC() error {
 		expanded := expandPath(line)
 		c.dynamic.additionalPaths = append(c.dynamic.additionalPaths, expanded)
 	}
-	
+
 	return scanner.Err()
 }
 
@@ -150,16 +150,16 @@ func (c *config) setupWatcher() error {
 	if err != nil {
 		return err
 	}
-	
+
 	c.watcher = watcher
 	rcPath := expandPath(idxrc)
 	rcDir := filepath.Dir(rcPath)
-	
+
 	// Watch the directory
 	if err := watcher.Add(rcDir); err != nil {
 		return err
 	}
-	
+
 	return nil
 }
 
@@ -190,7 +190,7 @@ func (c *config) watchLoop() {
 func (c *config) Path() []string {
 	c.dynamic.RLock()
 	defer c.dynamic.RUnlock()
-	
+
 	paths := strings.Split(c.static.Path, ":")
 	// Filter empty paths
 	filtered := make([]string, 0, len(paths)+len(c.dynamic.additionalPaths))

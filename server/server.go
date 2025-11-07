@@ -18,6 +18,11 @@ import (
 	"github.com/0xADE/ade-ctld/parser"
 )
 
+const (
+	andOp = "and"
+	orOp  = "or"
+)
+
 // Server handles Unix socket connections and command execution
 type Server struct {
 	listener net.Listener
@@ -39,7 +44,7 @@ type Filters struct {
 // FilterExpr represents a filter expression
 type FilterExpr struct {
 	Values []string
-	Op     string // "or", "and", "not"
+	Op     string // orOp, andOp, "not"
 }
 
 // NewServer creates a new server instance
@@ -49,7 +54,7 @@ func NewServer(idx *indexer.Indexer) (*Server, error) {
 
 	// Create directory if needed
 	socketDir := filepath.Dir(socketPath)
-	if err := os.MkdirAll(socketDir, 0755); err != nil {
+	if err := os.MkdirAll(socketDir, 0750); err != nil {
 		return nil, err
 	}
 
@@ -162,16 +167,16 @@ func (s *Server) handleFilterName(conn net.Conn, cmd *parser.Command) {
 	s.filters.mu.Lock()
 	defer s.filters.mu.Unlock()
 
-	expr := FilterExpr{Values: []string{}, Op: "or"}
+	expr := FilterExpr{Values: []string{}, Op: orOp}
 	for _, arg := range cmd.Args {
 		switch arg.Type {
 		case parser.TypeString:
 			expr.Values = append(expr.Values, arg.Str)
 		case parser.TypeBool:
 			if arg.Bool {
-				expr.Op = "or"
+				expr.Op = orOp
 			} else {
-				expr.Op = "and"
+				expr.Op = andOp
 			}
 		}
 	}
@@ -191,15 +196,15 @@ func (s *Server) handleFilterCat(conn net.Conn, cmd *parser.Command) {
 	s.filters.mu.Lock()
 	defer s.filters.mu.Unlock()
 
-	expr := FilterExpr{Values: []string{}, Op: "and"}
+	expr := FilterExpr{Values: []string{}, Op: andOp}
 	for _, arg := range cmd.Args {
 		if arg.Type == parser.TypeString {
 			expr.Values = append(expr.Values, arg.Str)
 		} else if arg.Type == parser.TypeBool {
 			if arg.Bool {
-				expr.Op = "or"
+				expr.Op = orOp
 			} else {
-				expr.Op = "and"
+				expr.Op = andOp
 			}
 		}
 	}
@@ -219,16 +224,16 @@ func (s *Server) handleFilterPath(conn net.Conn, cmd *parser.Command) {
 	s.filters.mu.Lock()
 	defer s.filters.mu.Unlock()
 
-	expr := FilterExpr{Values: []string{}, Op: "or"}
+	expr := FilterExpr{Values: []string{}, Op: orOp}
 	for _, arg := range cmd.Args {
 		switch arg.Type {
 		case parser.TypeString:
 			expr.Values = append(expr.Values, arg.Str)
 		case parser.TypeBool:
 			if arg.Bool {
-				expr.Op = "or"
+				expr.Op = orOp
 			} else {
-				expr.Op = "and"
+				expr.Op = andOp
 			}
 		}
 	}
@@ -391,7 +396,7 @@ func (s *Server) handleRun(conn net.Conn, cmd *parser.Command) {
 	log.Printf("[DEBUG] Running application with id: %d", id)
 
 	idx := s.indexer.GetIndex()
-	entry, ok := idx.Get(int64(id))
+	entry, ok := idx.Get(id)
 	if !ok {
 		log.Printf("[ERROR] Index %d not found", id)
 		s.writeError(conn, "run", "index not found", "Can't run application, requested index not found.")

@@ -32,16 +32,16 @@ func (idx *Indexer) Start(ctx context.Context) error {
 	}
 	idx.running = true
 	idx.mu.Unlock()
-	
+
 	// Clear existing index
 	idx.index = NewIndex()
-	
+
 	// Create channels for results
 	execChan := make(chan *executable.ExecutableInfo, 100)
 	desktopChan := make(chan *desktop.DesktopEntry, 100)
-	
+
 	var wg sync.WaitGroup
-	
+
 	// Start executable scanning
 	wg.Add(1)
 	go func() {
@@ -53,7 +53,7 @@ func (idx *Indexer) Start(ctx context.Context) error {
 			return
 		}
 	}()
-	
+
 	// Start desktop file scanning
 	wg.Add(1)
 	go func() {
@@ -63,17 +63,17 @@ func (idx *Indexer) Start(ctx context.Context) error {
 			return
 		}
 	}()
-	
+
 	// Process results
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
 		idx.processResults(ctx, execChan, desktopChan)
 	}()
-	
+
 	// Channels are closed by ScanPaths and ScanDesktopFiles when they finish
 	// No need to close them here
-	
+
 	return nil
 }
 
@@ -87,10 +87,10 @@ func (idx *Indexer) processResults(ctx context.Context, execChan <-chan *executa
 				execChan = nil
 			} else {
 				entry := &Entry{
-					Name:     exec.Name,
-					Path:     exec.Path,
-					Exec:     exec.Path,
-					Terminal: false,
+					Name:      exec.Name,
+					Path:      exec.Path,
+					Exec:      exec.Path,
+					Terminal:  false,
 					IsDesktop: false,
 				}
 				idx.index.Add(entry)
@@ -103,7 +103,7 @@ func (idx *Indexer) processResults(ctx context.Context, execChan <-chan *executa
 				if desktop.IsNoDisplay(desk.Path) {
 					continue
 				}
-				
+
 				entry := &Entry{
 					Name:       desk.Name,
 					Names:      desk.Names,
@@ -116,7 +116,7 @@ func (idx *Indexer) processResults(ctx context.Context, execChan <-chan *executa
 				idx.index.Add(entry)
 			}
 		}
-		
+
 		if execChan == nil && desktopChan == nil {
 			break
 		}
@@ -143,4 +143,3 @@ func (idx *Indexer) Stop() {
 	defer idx.mu.Unlock()
 	idx.running = false
 }
-

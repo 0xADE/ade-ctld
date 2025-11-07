@@ -9,7 +9,7 @@ import (
 // ScanPaths scans executable files in the given paths
 func ScanPaths(paths []string, resultChan chan<- *ExecutableInfo) error {
 	defer close(resultChan)
-	
+
 	for _, path := range paths {
 		if err := scanPath(path, resultChan); err != nil {
 			// Continue scanning other paths even if one fails
@@ -34,28 +34,28 @@ func scanPath(rootPath string, resultChan chan<- *ExecutableInfo) error {
 			}
 			return nil
 		}
-		
+
 		// Skip directories
 		if info.IsDir() {
 			return nil
 		}
-		
+
 		// Check if file is executable
 		if !isExecutable(info) {
 			return nil
 		}
-		
+
 		// Skip hidden files (starting with .)
 		baseName := filepath.Base(path)
 		if strings.HasPrefix(baseName, ".") {
 			return nil
 		}
-		
+
 		resultChan <- &ExecutableInfo{
 			Name: baseName,
 			Path: path,
 		}
-		
+
 		return nil
 	})
 }
@@ -65,4 +65,3 @@ func isExecutable(info os.FileInfo) bool {
 	mode := info.Mode()
 	return mode&0111 != 0
 }
-

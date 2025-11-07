@@ -6,14 +6,14 @@ import (
 
 // Entry represents a single indexed application entry
 type Entry struct {
-	ID       int64             // Unique identifier
-	Name     string            // Default name (English or fallback)
-	Names    map[string]string // Localized names (locale -> name)
-	Path     string            // Path to executable or .desktop file
-	Exec     string            // Command to execute
-	Terminal bool              // Whether to run in terminal
-	Categories []string        // Application categories
-	IsDesktop bool            // Whether this is from a .desktop file
+	ID         int64             // Unique identifier
+	Name       string            // Default name (English or fallback)
+	Names      map[string]string // Localized names (locale -> name)
+	Path       string            // Path to executable or .desktop file
+	Exec       string            // Command to execute
+	Terminal   bool              // Whether to run in terminal
+	Categories []string          // Application categories
+	IsDesktop  bool              // Whether this is from a .desktop file
 }
 
 // Index stores all indexed entries with thread-safe access
@@ -35,7 +35,7 @@ func NewIndex() *Index {
 func (idx *Index) Add(entry *Entry) int64 {
 	idx.mu.Lock()
 	defer idx.mu.Unlock()
-	
+
 	entry.ID = idx.nextID
 	idx.nextID++
 	idx.entries[entry.ID] = entry
@@ -46,7 +46,7 @@ func (idx *Index) Add(entry *Entry) int64 {
 func (idx *Index) Get(id int64) (*Entry, bool) {
 	idx.mu.RLock()
 	defer idx.mu.RUnlock()
-	
+
 	entry, ok := idx.entries[id]
 	return entry, ok
 }
@@ -55,7 +55,7 @@ func (idx *Index) Get(id int64) (*Entry, bool) {
 func (idx *Index) GetAll() []*Entry {
 	idx.mu.RLock()
 	defer idx.mu.RUnlock()
-	
+
 	result := make([]*Entry, 0, len(idx.entries))
 	for _, entry := range idx.entries {
 		result = append(result, entry)
@@ -69,4 +69,3 @@ func (idx *Index) Count() int {
 	defer idx.mu.RUnlock()
 	return len(idx.entries)
 }
-

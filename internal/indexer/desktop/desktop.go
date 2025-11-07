@@ -10,32 +10,32 @@ import (
 
 // DesktopEntry represents a parsed .desktop file
 type DesktopEntry struct {
-	Name        string            // Default name
-	Names       map[string]string // Localized names (locale -> name)
-	Exec        string            // Exec command
-	Terminal    bool              // Whether to run in terminal
-	Categories  []string          // Application categories
-	Path        string            // Path to .desktop file
+	Name       string            // Default name
+	Names      map[string]string // Localized names (locale -> name)
+	Exec       string            // Exec command
+	Terminal   bool              // Whether to run in terminal
+	Categories []string          // Application categories
+	Path       string            // Path to .desktop file
 }
 
 // ScanDesktopFiles scans for .desktop files in standard locations
 func ScanDesktopFiles(resultChan chan<- *DesktopEntry) error {
 	defer close(resultChan)
-	
+
 	// Standard desktop file locations
 	paths := []string{
 		"/usr/share/applications",
 		"/usr/local/share/applications",
 		filepath.Join(os.Getenv("HOME"), ".local/share/applications"),
 	}
-	
+
 	for _, path := range paths {
 		if err := scanDesktopPath(path, resultChan); err != nil {
 			// Continue scanning other paths
 			continue
 		}
 	}
-	
+
 	return nil
 }
 
@@ -47,21 +47,21 @@ func scanDesktopPath(rootPath string, resultChan chan<- *DesktopEntry) error {
 			}
 			return nil
 		}
-		
+
 		if info.IsDir() {
 			return nil
 		}
-		
+
 		if !strings.HasSuffix(path, ".desktop") {
 			return nil
 		}
-		
+
 		entry, err := ParseDesktopFile(path)
 		if err != nil {
 			// Skip invalid files
 			return nil
 		}
-		
+
 		resultChan <- entry
 		return nil
 	})
@@ -74,24 +74,24 @@ func ParseDesktopFile(path string) (*DesktopEntry, error) {
 		return nil, err
 	}
 	defer file.Close()
-	
+
 	entry := &DesktopEntry{
 		Path:  path,
 		Names: make(map[string]string),
 	}
-	
+
 	scanner := bufio.NewScanner(file)
 	var currentSection string
 	var inDesktopEntry bool
-	
+
 	for scanner.Scan() {
 		line := strings.TrimSpace(scanner.Text())
-		
+
 		// Skip empty lines and comments
 		if line == "" || strings.HasPrefix(line, "#") {
 			continue
 		}
-		
+
 		// Check for section header
 		if strings.HasPrefix(line, "[") && strings.HasSuffix(line, "]") {
 			currentSection = strings.Trim(line, "[]")
@@ -102,20 +102,20 @@ func ParseDesktopFile(path string) (*DesktopEntry, error) {
 			}
 			continue
 		}
-		
+
 		if !inDesktopEntry {
 			continue
 		}
-		
+
 		// Parse key=value pairs
 		parts := strings.SplitN(line, "=", 2)
 		if len(parts) != 2 {
 			continue
 		}
-		
+
 		key := strings.TrimSpace(parts[0])
 		value := strings.TrimSpace(parts[1])
-		
+
 		switch key {
 		case "Name":
 			entry.Name = value
@@ -141,23 +141,23 @@ func ParseDesktopFile(path string) (*DesktopEntry, error) {
 			}
 		}
 	}
-	
+
 	if err := scanner.Err(); err != nil {
 		return nil, err
 	}
-	
+
 	// Validate required fields
 	if entry.Name == "" && entry.Exec == "" {
 		return nil, fmt.Errorf("missing required fields")
 	}
-	
+
 	// Set default name if not set
 	if entry.Name == "" {
 		// Use filename without extension
 		baseName := filepath.Base(path)
 		entry.Name = strings.TrimSuffix(baseName, ".desktop")
 	}
-	
+
 	return entry, nil
 }
 
@@ -166,12 +166,12 @@ func (d *DesktopEntry) GetLocalizedName(locale string) string {
 	if locale == "" {
 		return d.Name
 	}
-	
+
 	// Try exact match
 	if name, ok := d.Names[locale]; ok {
 		return name
 	}
-	
+
 	// Try language part (e.g., "en" from "en_US")
 	if idx := strings.Index(locale, "_"); idx > 0 {
 		lang := locale[:idx]
@@ -179,7 +179,7 @@ func (d *DesktopEntry) GetLocalizedName(locale string) string {
 			return name
 		}
 	}
-	
+
 	// Try language part (e.g., "en" from "en-US")
 	if idx := strings.Index(locale, "-"); idx > 0 {
 		lang := locale[:idx]
@@ -187,7 +187,7 @@ func (d *DesktopEntry) GetLocalizedName(locale string) string {
 			return name
 		}
 	}
-	
+
 	// Fallback to default
 	return d.Name
 }
@@ -195,7 +195,7 @@ func (d *DesktopEntry) GetLocalizedName(locale string) string {
 // ExpandExecCommand expands %-codes in Exec command
 func (d *DesktopEntry) ExpandExecCommand(filePath string) string {
 	exec := d.Exec
-	
+
 	// Replace common field codes
 	exec = strings.ReplaceAll(exec, "%f", filePath)
 	exec = strings.ReplaceAll(exec, "%F", filePath)
@@ -204,10 +204,10 @@ func (d *DesktopEntry) ExpandExecCommand(filePath string) string {
 	exec = strings.ReplaceAll(exec, "%i", "")
 	exec = strings.ReplaceAll(exec, "%c", d.Name)
 	exec = strings.ReplaceAll(exec, "%k", d.Path)
-	
+
 	// Remove % codes that we don't handle
 	exec = removeFieldCodes(exec)
-	
+
 	return exec
 }
 
@@ -239,29 +239,29 @@ func IsNoDisplay(path string) bool {
 		return false
 	}
 	defer file.Close()
-	
+
 	scanner := bufio.NewScanner(file)
 	var inDesktopEntry bool
-	
+
 	for scanner.Scan() {
 		line := strings.TrimSpace(scanner.Text())
-		
+
 		if strings.HasPrefix(line, "[") && strings.HasSuffix(line, "]") {
 			section := strings.Trim(line, "[]")
 			inDesktopEntry = (section == "Desktop Entry")
 			continue
 		}
-		
+
 		if !inDesktopEntry {
 			continue
 		}
-		
-		if strings.HasPrefix(line, "NoDisplay=") {
-			value := strings.TrimSpace(strings.TrimPrefix(line, "NoDisplay="))
+
+		if after, ok := strings.CutPrefix(line, "NoDisplay="); ok {
+			value := strings.TrimSpace(after)
 			return strings.ToLower(value) == "true"
 		}
 	}
-	
+
 	return false
 }
 
@@ -269,9 +269,8 @@ func IsNoDisplay(path string) bool {
 func CleanExecCommand(exec string) string {
 	// Remove field codes
 	exec = removeFieldCodes(exec)
-	
+
 	// Clean up whitespace
 	fields := strings.Fields(exec)
 	return strings.Join(fields, " ")
 }
-

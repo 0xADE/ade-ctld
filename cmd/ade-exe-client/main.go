@@ -115,7 +115,7 @@ func main() {
 
 	// Read and print response
 	readResponse(conn)
-	
+
 	// Close connection and exit in non-interactive mode
 	log.Printf("[DEBUG] Closing connection and exiting")
 	conn.Close()
@@ -126,12 +126,12 @@ func main() {
 // Returns the formatted string to send (without newline)
 func formatArgument(arg string) string {
 	arg = strings.TrimSpace(arg)
-	
+
 	// If starts with ", it's a string (keep prefix)
 	if strings.HasPrefix(arg, `"`) {
 		return arg
 	}
-	
+
 	// Check for boolean literals
 	if arg == "t" {
 		return "t"
@@ -139,7 +139,7 @@ func formatArgument(arg string) string {
 	if arg == "f" {
 		return "f"
 	}
-	
+
 	// Check for recognized keywords (boolean operators)
 	keywords := []string{"or", "and", "not"}
 	for _, kw := range keywords {
@@ -147,19 +147,19 @@ func formatArgument(arg string) string {
 			return arg
 		}
 	}
-	
+
 	// Check if it's numeric (all digits)
 	if _, err := strconv.ParseInt(arg, 10, 64); err == nil {
 		return arg
 	}
-	
+
 	// Default: treat as string (add prefix)
 	return `"` + arg
 }
 
 func sendCommand(conn net.Conn, cmdName string, args []string) {
 	log.Printf("[DEBUG] Sending command: %s with %d args", cmdName, len(args))
-	
+
 	// Send arguments with type detection
 	for _, arg := range args {
 		formatted := formatArgument(arg)
