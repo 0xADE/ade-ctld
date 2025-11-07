@@ -23,6 +23,8 @@ type Client struct {
 	socket string
 }
 
+const protoVer = "TXT01" // cmdlist protocol, text format, v01
+
 // NewClient creates a new client and connects to the server
 func NewClient() (*Client, error) {
 	socketPath, err := getSocketPath()
@@ -36,7 +38,7 @@ func NewClient() (*Client, error) {
 	}
 
 	// Send header
-	if _, err := conn.Write([]byte("TXT01")); err != nil {
+	if _, err := conn.Write([]byte(protoVer)); err != nil {
 		conn.Close()
 		return nil, fmt.Errorf("failed to send header: %w", err)
 	}
@@ -191,7 +193,7 @@ func (c *Client) SetFilterName(query string) error {
 	if query == "" {
 		return c.ResetFilters()
 	}
-	return c.sendCommand("+filter-name", []string{query})
+	return c.sendCommand("filter-name", []string{query})
 }
 
 // List gets the list of applications matching current filters

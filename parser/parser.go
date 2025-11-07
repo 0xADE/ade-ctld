@@ -114,6 +114,7 @@ func parseCommand(line string) string {
 
 	// Known commands
 	commands := []string{
+		"filter-name",
 		"+filter-name",
 		"+filter-cat",
 		"+filter-path",
@@ -154,16 +155,11 @@ func parseValue(line string) (Value, error) {
 	// Boolean operators (keywords)
 	switch line {
 	case "or":
-		return Value{Type: TypeBool, Bool: true}, nil // true = OR operation
+		return Value{Type: TypeBool, Bool: true, Str: "or"}, nil // true = OR operation
 	case "and":
-		return Value{Type: TypeBool, Bool: false}, nil // false = AND operation
+		return Value{Type: TypeBool, Bool: false, Str: "and"}, nil // false = AND operation
 	case "not":
-		// NOT is a special case - we need to distinguish it from AND
-		// For now, we'll use a sentinel value. In practice, the server
-		// handlers should check for the string "not" when processing bool args
-		// We use Bool: false but the handler should check the original string
-		// TODO: Consider adding a separate field or type for operation type
-		return Value{Type: TypeBool, Bool: false}, nil
+		return Value{Type: TypeBool, Bool: false, Str: "not"}, nil // NOT operation
 	}
 
 	// Try parsing as integer (must be all digits)

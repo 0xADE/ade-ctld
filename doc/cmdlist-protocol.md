@@ -21,44 +21,51 @@ It supports binary or text representation. Well, text format only really support
 
 ## Commands
 
+### filter-name
+*Arguments:* Arbitrary number of arguments of types `<str>` or `<bool>`
+Sets filename filter by which applications are searched in PATH. Both the direct filename and its headers from desktop files are considered in the name. String arguments are treated as search terms, while boolean arguments (`t`, `f`, `or`, `and`, `not`) control the logical operation for combining multiple search terms. By default, multiple string arguments are combined with AND logic.
+Each new `filter-name` commands replaces already set filters for names.
+*Returns:* cmd: +filter-name, status: 0
+
 ### +filter-name
 *Arguments:* Arbitrary number of arguments of types `<str>` or `<bool>`
-*Sets filename filter by which applications are searched in PATH. Both the direct filename and its headers from desktop files are considered in the name. String arguments are treated as search terms, while boolean arguments (`t`, `f`, `or`, `and`, `not`) control the logical operation for combining multiple search terms. By default, multiple string arguments are combined with OR logic.*
+Sets filename filter by which applications are searched in PATH. Both the direct filename and its headers from desktop files are considered in the name. String arguments are treated as search terms, while boolean arguments (`t`, `f`, `or`, `and`, `not`) control the logical operation for combining multiple search terms. By default, multiple string arguments are combined with OR logic.
+Each new `+filter-name` merges its arguments with already set filters for names.
 *Returns:* cmd: +filter-name, status: 0
 
 ### +filter-cat
 *Arguments:* Arbitrary number of `<str>` arguments and optional `<bool>` arguments
-*Add arguments from string parameters as category filters. By default, multiple categories are combined with AND logic, unless OR boolean argument (`or`, `t`) is explicitly provided. Boolean literals (`t`/`f`) and operators (`or`, `and`, `not`) can be used to control logical operations.*
+Add arguments from string parameters as category filters. By default, multiple categories are combined with AND logic, unless OR boolean argument (`or`, `t`) is explicitly provided. Boolean literals (`t`/`f`) and operators (`or`, `and`, `not`) can be used to control logical operations.
 *Returns:* cmd: +filter-cat, status: 0
 
 ### +filter-path
 *Arguments:* Arbitrary number of `<str>` arguments and optional `<bool>` arguments
-*Add arguments from string parameters as path filters. By default, multiple paths are combined with OR logic, unless AND boolean argument (`and`, `f`) is explicitly provided. Boolean literals (`t`/`f`) and operators (`or`, `and`, `not`) can be used to control logical operations.*
+Add arguments from string parameters as path filters. By default, multiple paths are combined with OR logic, unless AND boolean argument (`and`, `f`) is explicitly provided. Boolean literals (`t`/`f`) and operators (`or`, `and`, `not`) can be used to control logical operations.
 *Returns:* cmd: +filter-path, status: 0
 
 ### 0filters
 *Arguments:* None
-*Reset all filters (name, category, and path filters) to empty state.*
+Reset all filters (name, category, and path filters) to empty state.
 *Returns:* cmd: 0filters, status: 0
 
 ### list
 *Arguments:* None
-*Return list of application names (with their IDs) according to current filter set. Different filter types (name, category, path) are combined with OR logic.*
+Return list of application names (with their IDs) according to current filter set. Different filter types (name, category, path) are combined with OR logic.
 *Returns:* len: <total_count>, limited: <displayed_count> (if limited), offset: <offset> (if paginated), list-next: <next_offset> <limit> (if more items available), followed by body containing ID-name pairs
 
 ### list-next
 *Arguments:* offset `<int>` (required), limit `<int>` (optional)
-*Return next portion of entries from the current filter set starting from the specified offset. Integer arguments are passed without quotes. If limit is not provided, uses the default list limit from configuration.*
+Return next portion of entries from the current filter set starting from the specified offset. Integer arguments are passed without quotes. If limit is not provided, uses the default list limit from configuration.
 *Returns:* len: <total_count>, limited: <displayed_count>, offset: <current_offset>, list-next: <next_offset> <limit> (if more items available), followed by body containing ID-name pairs
 
 ### run
 *Arguments:* id `<int>` (required)
-*Run application by ID from the index database. The ID argument is passed as an integer (without quotes). The application is executed either directly or in a terminal if specified in its desktop entry.*
+Run application by ID from the index database. The ID argument is passed as an integer (without quotes). The application is executed either directly or in a terminal if specified in its desktop entry.
 *Returns:* cmd: run, idx: <application_id>, status: <execution_status>, pid: <process_id>
 
 ### lang
 *Arguments:* isolang `<str>` (required)
-*Set preferred language for returning localized results (for example, when selecting localizations returned from desktop files). The language code argument is passed as a string (with `"` prefix).*
+Set preferred language for returning localized results (for example, when selecting localizations returned from desktop files). The language code argument is passed as a string (with `"` prefix).
 *Returns:* cmd: lang, status: 0, lang: <language_code>
 
 ## Fort Style

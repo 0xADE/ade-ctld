@@ -141,6 +141,8 @@ func (s *Server) handleConnection(conn net.Conn) {
 
 func (s *Server) executeCommand(conn net.Conn, cmd *parser.Command) {
 	switch cmd.Name {
+	case "filter-name":
+		s.handleFilterNameReplace(conn, cmd)
 	case "+filter-name":
 		s.handleFilterName(conn, cmd)
 	case "+filter-cat":
@@ -162,8 +164,43 @@ func (s *Server) executeCommand(conn net.Conn, cmd *parser.Command) {
 	}
 }
 
+func (s *Server) handleFilterNameReplace(conn net.Conn, cmd *parser.Command) {
+	log.Printf("[DEBUG] Handling filter-name command (replace)")
+	s.filters.mu.Lock()
+	defer s.filters.mu.Unlock()
+
+	expr := FilterExpr{Values: []string{}, Op: andOp}
+	for _, arg := range cmd.Args {
+		switch arg.Type {
+		case parser.TypeString:
+			expr.Values = append(expr.Values, arg.Str)
+		case parser.TypeBool:
+			// Check the original string to distinguish between and/not
+			if arg.Str == "not" {
+				expr.Op = "not"
+			} else if arg.Str == "or" || arg.Bool {
+				expr.Op = orOp
+			} else {
+				expr.Op = andOp
+			}
+		}
+	}
+
+	if len(expr.Values) > 0 {
+		s.filters.nameFilters = []FilterExpr{expr}
+		log.Printf("[DEBUG] Replaced name filters with: %v (op: %s)", expr.Values, expr.Op)
+	} else {
+		s.filters.nameFilters = []FilterExpr{}
+		log.Printf("[DEBUG] Cleared name filters")
+	}
+
+	// Send success response (returns +filter-name as per spec)
+	attrs := fmt.Sprintf("cmd: +filter-name\nstatus: 0\n\n")
+	s.writeResponse(conn, attrs)
+}
+
 func (s *Server) handleFilterName(conn net.Conn, cmd *parser.Command) {
-	log.Printf("[DEBUG] Handling filter-name command")
+	log.Printf("[DEBUG] Handling +filter-name command")
 	s.filters.mu.Lock()
 	defer s.filters.mu.Unlock()
 
@@ -173,7 +210,10 @@ func (s *Server) handleFilterName(conn net.Conn, cmd *parser.Command) {
 		case parser.TypeString:
 			expr.Values = append(expr.Values, arg.Str)
 		case parser.TypeBool:
-			if arg.Bool {
+			// Check the original string to distinguish between and/not
+			if arg.Str == "not" {
+				expr.Op = "not"
+			} else if arg.Str == "or" || arg.Bool {
 				expr.Op = orOp
 			} else {
 				expr.Op = andOp
@@ -518,22 +558,59 @@ func (s *Server) matchesFilters(entry *indexer.Entry) bool {
 }
 
 func (s *Server) matchesNameFilter(entry *indexer.Entry, filter FilterExpr) bool {
-	searchText := strings.ToLower(entry.Name)
-	for _, value := range filter.Values {
-		if strings.Contains(searchText, strings.ToLower(value)) {
-			return true
-		}
-	}
-	// Also check localized names
+	// Collect all searchable names (direct name + localized names)
+	searchNames := []string{strings.ToLower(entry.Name)}
 	for _, name := range entry.Names {
-		searchText := strings.ToLower(name)
-		for _, value := range filter.Values {
-			if strings.Contains(searchText, strings.ToLower(value)) {
-				return true
+		searchNames = append(searchNames, strings.ToLower(name))
+	}
+
+	// Check matches for each value
+	matches := make([]bool, len(filter.Values))
+	for i, value := range filter.Values {
+		valueLower := strings.ToLower(value)
+		for _, searchName := range searchNames {
+			if strings.Contains(searchName, valueLower) {
+				matches[i] = true
+				break
 			}
 		}
 	}
-	return false
+
+	// Apply operation logic
+	switch filter.Op {
+	case orOp:
+		// OR: return true if ANY value matches
+		for _, match := range matches {
+			if match {
+				return true
+			}
+		}
+		return false
+	case andOp:
+		// AND: return true if ALL values match
+		for _, match := range matches {
+			if !match {
+				return false
+			}
+		}
+		return len(matches) > 0
+	case "not":
+		// NOT: return true if NONE of the values match
+		for _, match := range matches {
+			if match {
+				return false
+			}
+		}
+		return true
+	default:
+		// Default to OR behavior
+		for _, match := range matches {
+			if match {
+				return true
+			}
+		}
+		return false
+	}
 }
 
 func (s *Server) matchesCatFilter(entry *indexer.Entry, filter FilterExpr) bool {
