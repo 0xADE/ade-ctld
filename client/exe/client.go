@@ -221,8 +221,31 @@ func isBlankLineBeforeBodyHeader(reader *bufio.Reader) bool {
 }
 
 // ResetFilters resets all filters
+// func (c *Client) ResetFilters() error {
+// 	c.mu.Lock()
+// 	defer c.mu.Unlock()
+
+// 	// Send reset filters command
+// 	if _, err := fmt.Fprintf(c.conn, "0filters\n"); err != nil {
+// 		return fmt.Errorf("failed to send reset filters command: %w", err)
+// 	}
+
+// 	// Read response
+// 	attrs, _, err := c.readResponse()
+// 	if err != nil {
+// 		return fmt.Errorf("failed to read response: %w", err)
+// 	}
+
+// 	// Check for errors
+// 	if errMsg, ok := attrs["error"]; ok {
+// 		return fmt.Errorf("server error: %s", errMsg)
+// 	}
+
+//		return nil
+//	}
 func (c *Client) ResetFilters() error {
 	return c.SendCommand("0filters", nil)
+
 }
 
 // SetFilterName sets a name filter
@@ -256,8 +279,8 @@ func (c *Client) List() ([]Application, error) {
 
 	// Parse body
 	var apps []Application
-	lines := strings.Split(strings.TrimSpace(body), "\n")
-	for _, line := range lines {
+	lines := strings.SplitSeq(strings.TrimSpace(body), "\n")
+	for line := range lines {
 		line = strings.TrimSpace(line)
 		if line == "" {
 			continue
