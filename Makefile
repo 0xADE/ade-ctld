@@ -35,11 +35,7 @@ test:
 
 .PHONY: run
 run: build
-	./$(BINDIR)/$(APP)
-
-.PHONY: run-log
-run-log: tidy build
-	SLOG_LEVEL=debug ./$(BINDIR)/$(APP)
+	./$(BINDIR)/ade-exe-ctld
 
 .PHONY: run-race
 run-race: tidy

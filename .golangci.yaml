@@ -50,10 +50,6 @@ linters:
   # Not need anymore:
   #  - copyloopvar fixed in Go 1.22
   #
-  # Need clarify, may be we need it:
-  # - errchkjson has too many occurences in our code :( But it could be useful.
-  # - nestif has a lot occurences with score even more than 20 :( LLM code quality :(
-  #
   enable:
     - bidichk
     - dogsled
@@ -76,6 +72,8 @@ linters:
     - unqueryvet
     - usestdlibvars
     - whitespace
+    - errchkjson
+    - nestif
     # Additionally included some of non fast linters:
     - goconst
     - gosec
@@ -127,21 +125,14 @@ linters:
       default: basic
       # List of rules to disable.
       # Default: empty
-      disable:
-        - pkg-doc
-        - single-pkg-doc
-        - require-pkg-doc
-        - start-with-name
-        - require-doc
-        - deprecated
-        - max-len
-        - no-unused-link
+      # disable:
       # A map for fine-tuning individual rules.
       # All subkeys are optional.
       options:
         max-len:
           # Maximum line length for godocs, not including the `// `, or `/*` or `*/` tokens.
           # Default: 77
+          # Use large displays!
           length: 127
         require-doc:
           # Ignore exported (public) symbols when applying the `require-doc` rule.
@@ -195,6 +186,11 @@ linters:
       # - restricted: checks only comments.
       # Default: ""
       mode: default
+
+    nestif:
+      # Minimal complexity of if statements to report.
+      # Default: 5
+      min-complexity: 7
 
     tagalign:
       # Align and sort can be used together or separately.

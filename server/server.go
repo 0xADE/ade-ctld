@@ -21,6 +21,7 @@ import (
 const (
 	andOp = "and"
 	orOp  = "or"
+	notOp = "not"
 )
 
 // Server handles Unix socket connections and command execution
@@ -44,7 +45,7 @@ type Filters struct {
 // FilterExpr represents a filter expression
 type FilterExpr struct {
 	Values []string
-	Op     string // orOp, andOp, "not"
+	Op     string // orOp, andOp, notOp
 }
 
 // NewServer creates a new server instance
@@ -176,9 +177,9 @@ func (s *Server) handleFilterNameReplace(conn net.Conn, cmd *parser.Command) {
 			expr.Values = append(expr.Values, arg.Str)
 		case parser.TypeBool:
 			// Check the original string to distinguish between and/not
-			if arg.Str == "not" {
-				expr.Op = "not"
-			} else if arg.Str == "or" || arg.Bool {
+			if arg.Str == notOp {
+				expr.Op = notOp
+			} else if arg.Str == orOp || arg.Bool {
 				expr.Op = orOp
 			} else {
 				expr.Op = andOp
@@ -211,8 +212,8 @@ func (s *Server) handleFilterName(conn net.Conn, cmd *parser.Command) {
 			expr.Values = append(expr.Values, arg.Str)
 		case parser.TypeBool:
 			// Check the original string to distinguish between and/not
-			if arg.Str == "not" {
-				expr.Op = "not"
+			if arg.Str == notOp {
+				expr.Op = notOp
 			} else if arg.Str == "or" || arg.Bool {
 				expr.Op = orOp
 			} else {
@@ -594,7 +595,7 @@ func (s *Server) matchesNameFilter(entry *indexer.Entry, filter FilterExpr) bool
 			}
 		}
 		return len(matches) > 0
-	case "not":
+	case notOp:
 		// NOT: return true if NONE of the values match
 		for _, match := range matches {
 			if match {
