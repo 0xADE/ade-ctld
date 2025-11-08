@@ -233,6 +233,101 @@ func (c *Client) SetFilterName(query string) error {
 	return c.SendCommand("filter-name", []string{query})
 }
 
+// List retrieves the list of applications matching current filters
+func (c *Client) List() ([]Application, error) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	// Send list command
+	if _, err := fmt.Fprintf(c.conn, "list\n"); err != nil {
+		return nil, fmt.Errorf("failed to send list command: %w", err)
+	}
+
+	// Read response
+	attrs, body, err := c.readResponse()
+	if err != nil {
+		return nil, fmt.Errorf("failed to read response: %w", err)
+	}
+
+	// Check for errors
+	if errMsg, ok := attrs["error"]; ok {
+		return nil, fmt.Errorf("server error: %s", errMsg)
+	}
+
+	// Parse body
+	var apps []Application
+	lines := strings.Split(strings.TrimSpace(body), "\n")
+	for _, line := range lines {
+		line = strings.TrimSpace(line)
+		if line == "" {
+			continue
+		}
+		parts := strings.Fields(line)
+		if len(parts) < 2 {
+			continue
+		}
+		id, err := strconv.ParseInt(parts[0], 10, 64)
+		if err != nil {
+			continue
+		}
+		name := strings.Join(parts[1:], " ")
+		apps = append(apps, Application{
+			ID:   id,
+			Name: name,
+		})
+	}
+
+	return apps, nil
+}
+
+// Run executes an application by ID
+func (c *Client) Run(id int64) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	// Send run command with id
+	if _, err := fmt.Fprintf(c.conn, "%d\nrun\n", id); err != nil {
+		return fmt.Errorf("failed to send run command: %w", err)
+	}
+
+	// Read response
+	attrs, _, err := c.readResponse()
+	if err != nil {
+		return fmt.Errorf("failed to read response: %w", err)
+	}
+
+	// Check for errors
+	if errMsg, ok := attrs["error"]; ok {
+		return fmt.Errorf("server error: %s", errMsg)
+	}
+
+	return nil
+}
+
+// RunInTerminal executes an application by ID in a terminal
+func (c *Client) RunInTerminal(id int64) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	// Send opt: terminal, id, run
+	if _, err := fmt.Fprintf(c.conn, "\"opt: terminal\n%d\nrun\n", id); err != nil {
+		return fmt.Errorf("failed to send run command: %w", err)
+	}
+
+	// Read response
+	attrs, _, err := c.readResponse()
+	if err != nil {
+		return fmt.Errorf("failed to read response: %w", err)
+	}
+
+	// Check for errors
+	if errMsg, ok := attrs["error"]; ok {
+		return fmt.Errorf("server error: %s", errMsg)
+	}
+
+	return nil
+}
+
 // readResponse is a private method that returns parsed response
 func (c *Client) readResponse() (map[string]string, string, error) {
 	reader := bufio.NewReader(c.conn)

@@ -59,8 +59,22 @@ Return next portion of entries from the current filter set starting from the spe
 *Returns:* len: <total_count>, limited: <displayed_count>, offset: <current_offset>, list-next: <next_offset> <limit> (if more items available), followed by body containing ID-name pairs
 
 ### run
-*Arguments:* id `<int>` (required)
+*Arguments:* id `<int>` (required), optionally preceded by opt: terminal `<str>` (optional)
 Run application by ID from the index database. The ID argument is passed as an integer (without quotes). The application is executed either directly or in a terminal if specified in its desktop entry.
+
+If the optional `"opt: terminal` argument is provided before the id, the application will be executed in a terminal regardless of the desktop entry's Terminal setting. The format is:
+```
+"opt: terminal
+<id>
+run
+```
+
+Without the optional argument, the format is:
+```
+<id>
+run
+```
+
 *Returns:* cmd: run, idx: <application_id>, status: <execution_status>, pid: <process_id>
 
 ### lang
@@ -164,6 +178,15 @@ idx: 1262
 status: 0
 pid: 2365
 ```
+
+Example of running an application in a terminal (regardless of desktop entry settings):
+```
+"opt: terminal
+1262
+run
+```
+
+This will launch Firefox for Wayland in a terminal and return the same response format.
 
 Here is an example of response to erroneous request:
 

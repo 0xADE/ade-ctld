@@ -139,6 +139,7 @@ func parseValue(line string) (Value, error) {
 	line = strings.TrimSpace(line)
 
 	// String value (prefixed with ")
+	// Supports special option strings like "opt: terminal" for run command
 	if after, ok := strings.CutPrefix(line, `"`); ok {
 		str := after
 		return Value{Type: TypeString, Str: str}, nil

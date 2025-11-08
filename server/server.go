@@ -196,7 +196,7 @@ func (s *Server) handleFilterNameReplace(conn net.Conn, cmd *parser.Command) {
 	}
 
 	// Send success response (returns +filter-name as per spec)
-	attrs := fmt.Sprintf("cmd: +filter-name\nstatus: 0\n\n")
+	attrs := "cmd: +filter-name\nstatus: 0\n\n"
 	s.writeResponse(conn, attrs)
 }
 
@@ -228,7 +228,7 @@ func (s *Server) handleFilterName(conn net.Conn, cmd *parser.Command) {
 	}
 
 	// Send success response
-	attrs := fmt.Sprintf("cmd: +filter-name\nstatus: 0\n\n")
+	attrs := "cmd: +filter-name\nstatus: 0\n\n"
 	s.writeResponse(conn, attrs)
 }
 
@@ -239,9 +239,10 @@ func (s *Server) handleFilterCat(conn net.Conn, cmd *parser.Command) {
 
 	expr := FilterExpr{Values: []string{}, Op: andOp}
 	for _, arg := range cmd.Args {
-		if arg.Type == parser.TypeString {
+		switch arg.Type {
+		case parser.TypeString:
 			expr.Values = append(expr.Values, arg.Str)
-		} else if arg.Type == parser.TypeBool {
+		case parser.TypeBool:
 			if arg.Bool {
 				expr.Op = orOp
 			} else {
@@ -427,14 +428,27 @@ func (s *Server) handleListNext(conn net.Conn, cmd *parser.Command) {
 func (s *Server) handleRun(conn net.Conn, cmd *parser.Command) {
 	log.Printf("[DEBUG] Handling run command")
 
-	if len(cmd.Args) == 0 || cmd.Args[0].Type != parser.TypeInt {
+	var id int64
+	forceTerminal := false
+
+	// Check for optional "opt: terminal" argument
+	if len(cmd.Args) > 0 && cmd.Args[0].Type == parser.TypeString && cmd.Args[0].Str == "opt: terminal" {
+		forceTerminal = true
+		if len(cmd.Args) < 2 || cmd.Args[1].Type != parser.TypeInt {
+			log.Printf("[ERROR] Run command missing id parameter after opt: terminal")
+			s.writeError(conn, "run", "missing id", "run command requires an id parameter after opt: terminal")
+			return
+		}
+		id = cmd.Args[1].Int
+	} else if len(cmd.Args) == 0 || cmd.Args[0].Type != parser.TypeInt {
 		log.Printf("[ERROR] Run command missing id parameter")
 		s.writeError(conn, "run", "missing id", "run command requires an id parameter")
 		return
+	} else {
+		id = cmd.Args[0].Int
 	}
 
-	id := cmd.Args[0].Int
-	log.Printf("[DEBUG] Running application with id: %d", id)
+	log.Printf("[DEBUG] Running application with id: %d, forceTerminal: %v", id, forceTerminal)
 
 	idx := s.indexer.GetIndex()
 	entry, ok := idx.Get(id)
@@ -448,10 +462,10 @@ func (s *Server) handleRun(conn net.Conn, cmd *parser.Command) {
 
 	// Execute the command
 	var execCmd *exec.Cmd
-	if entry.Terminal {
+	if forceTerminal || entry.Terminal {
 		cfg := config.Get()
 		term := cfg.Terminal()
-		execCmd = exec.Command(term, "-e", entry.Exec)
+		execCmd = exec.Command(term, "--hold=yes", "-e", entry.Exec)
 		log.Printf("[DEBUG] Executing in terminal: %s -e %s", term, entry.Exec)
 	} else {
 		// Parse exec command
