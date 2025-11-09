@@ -145,7 +145,7 @@ func (s *Server) executeCommand(conn net.Conn, cmd *parser.Command) {
 	case "filter-name":
 		s.handleFilterNameReplace(conn, cmd)
 	case "+filter-name":
-		s.handleFilterName(conn, cmd)
+		s.handleAddFilterName(conn, cmd)
 	case "+filter-cat":
 		s.handleFilterCat(conn, cmd)
 	case "+filter-path":
@@ -166,7 +166,7 @@ func (s *Server) executeCommand(conn net.Conn, cmd *parser.Command) {
 }
 
 func (s *Server) handleFilterNameReplace(conn net.Conn, cmd *parser.Command) {
-	log.Printf("[DEBUG] Handling filter-name command (replace)")
+	log.Printf("[DEBUG] Handling filter-name command")
 	s.filters.mu.Lock()
 	defer s.filters.mu.Unlock()
 
@@ -195,12 +195,12 @@ func (s *Server) handleFilterNameReplace(conn net.Conn, cmd *parser.Command) {
 		log.Printf("[DEBUG] Cleared name filters")
 	}
 
-	// Send success response (returns +filter-name as per spec)
-	attrs := "cmd: +filter-name\nstatus: 0\n\n"
+	// Send success response (returns filter-name as per spec)
+	attrs := "cmd: filter-name\nstatus: 0\n\n"
 	s.writeResponse(conn, attrs)
 }
 
-func (s *Server) handleFilterName(conn net.Conn, cmd *parser.Command) {
+func (s *Server) handleAddFilterName(conn net.Conn, cmd *parser.Command) {
 	log.Printf("[DEBUG] Handling +filter-name command")
 	s.filters.mu.Lock()
 	defer s.filters.mu.Unlock()
@@ -465,7 +465,7 @@ func (s *Server) handleRun(conn net.Conn, cmd *parser.Command) {
 	if forceTerminal || entry.Terminal {
 		cfg := config.Get()
 		term := cfg.Terminal()
-		execCmd = exec.Command(term, "--hold=yes", "-e", entry.Exec)
+		execCmd = exec.Command(term, "--hold", "-e", entry.Exec)
 		log.Printf("[DEBUG] Executing in terminal: %s -e %s", term, entry.Exec)
 	} else {
 		// Parse exec command

@@ -61,38 +61,62 @@ func (c *Client) Close() error {
 }
 
 // FormatArgument formats an argument according to its type
-func FormatArgument(arg string) string {
-	arg = strings.TrimSpace(arg)
-
-	// If starts with ", it's a string (keep prefix)
-	if strings.HasPrefix(arg, `"`) {
-		return arg
-	}
-
-	// Check for boolean literals
-	if arg == "t" || arg == "f" {
-		return arg
-	}
-
-	// Check for recognized keywords (boolean operators)
-	keywords := []string{"or", "and", "not"}
-	for _, kw := range keywords {
-		if arg == kw {
-			return arg
+func FormatArgument(arg any) string {
+	switch v := arg.(type) {
+	case int:
+		return strconv.FormatInt(int64(v), 10)
+	case int8:
+		return strconv.FormatInt(int64(v), 10)
+	case int16:
+		return strconv.FormatInt(int64(v), 10)
+	case int32:
+		return strconv.FormatInt(int64(v), 10)
+	case int64:
+		return strconv.FormatInt(v, 10)
+	case uint:
+		return strconv.FormatUint(uint64(v), 10)
+	case uint8:
+		return strconv.FormatUint(uint64(v), 10)
+	case uint16:
+		return strconv.FormatUint(uint64(v), 10)
+	case uint32:
+		return strconv.FormatUint(uint64(v), 10)
+	case uint64:
+		return strconv.FormatUint(v, 10)
+	case bool:
+		if v {
+			return "t"
 		}
-	}
+		return "f"
+	case string:
+		// If starts with ", it's a string (keep prefix)
+		if strings.HasPrefix(v, `"`) {
+			return v
+		}
 
-	// Check if it's numeric (all digits)
-	if _, err := strconv.ParseInt(arg, 10, 64); err == nil {
-		return arg
-	}
+		// Check for boolean literals
+		if v == "t" || v == "f" {
+			return v
+		}
 
-	// Default: treat as string (add prefix)
-	return `"` + arg
+		// Check for recognized keywords (boolean operators)
+		keywords := []string{"or", "and", "not"}
+		for _, kw := range keywords {
+			if v == kw {
+				return v
+			}
+		}
+
+		// Default: treat as string (add prefix)
+		return `"` + v
+	default:
+		// For other types, convert to string and add quotes
+		return `"` + fmt.Sprintf("%v", arg) + `"`
+	}
 }
 
 // SendCommand sends a command to the server
-func (c *Client) SendCommand(cmdName string, args []string) error {
+func (c *Client) SendCommand(cmdName string, args ...any) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
@@ -221,31 +245,27 @@ func isBlankLineBeforeBodyHeader(reader *bufio.Reader) bool {
 }
 
 // ResetFilters resets all filters
-// func (c *Client) ResetFilters() error {
-// 	c.mu.Lock()
-// 	defer c.mu.Unlock()
-
-// 	// Send reset filters command
-// 	if _, err := fmt.Fprintf(c.conn, "0filters\n"); err != nil {
-// 		return fmt.Errorf("failed to send reset filters command: %w", err)
-// 	}
-
-// 	// Read response
-// 	attrs, _, err := c.readResponse()
-// 	if err != nil {
-// 		return fmt.Errorf("failed to read response: %w", err)
-// 	}
-
-// 	// Check for errors
-// 	if errMsg, ok := attrs["error"]; ok {
-// 		return fmt.Errorf("server error: %s", errMsg)
-// 	}
-
-//		return nil
-//	}
 func (c *Client) ResetFilters() error {
-	return c.SendCommand("0filters", nil)
+	c.mu.Lock()
+	defer c.mu.Unlock()
 
+	// Send reset filters command
+	if err := c.SendCommand("0filters"); err != nil {
+		return fmt.Errorf("failed to send reset filters command: %w", err)
+	}
+
+	// Read response
+	attrs, _, err := c.readResponse()
+	if err != nil {
+		return fmt.Errorf("failed to read response: %w", err)
+	}
+
+	// Check for errors
+	if errMsg, ok := attrs["error"]; ok {
+		return fmt.Errorf("server error: %s", errMsg)
+	}
+
+	return nil
 }
 
 // SetFilterName sets a name filter
@@ -253,7 +273,24 @@ func (c *Client) SetFilterName(query string) error {
 	if query == "" {
 		return c.ResetFilters()
 	}
-	return c.SendCommand("filter-name", []string{query})
+
+	if err := c.SendCommand("filter-name", query); err != nil {
+		return fmt.Errorf("failed to set name filter command: %w", err)
+	}
+
+	// Read response
+	attrs, _, err := c.readResponse()
+	if err != nil {
+		return fmt.Errorf("failed to read response: %w", err)
+	}
+
+	// Check for errors
+	if errMsg, ok := attrs["error"]; ok {
+		return fmt.Errorf("server error: %s", errMsg)
+	}
+
+	return nil
+
 }
 
 // List retrieves the list of applications matching current filters
@@ -262,7 +299,7 @@ func (c *Client) List() ([]Application, error) {
 	defer c.mu.Unlock()
 
 	// Send list command
-	if _, err := fmt.Fprintf(c.conn, "list\n"); err != nil {
+	if err := c.SendCommand("list"); err != nil {
 		return nil, fmt.Errorf("failed to send list command: %w", err)
 	}
 
@@ -309,7 +346,7 @@ func (c *Client) Run(id int64) error {
 	defer c.mu.Unlock()
 
 	// Send run command with id
-	if _, err := fmt.Fprintf(c.conn, "%d\nrun\n", id); err != nil {
+	if err := c.SendCommand("run", id); err != nil {
 		return fmt.Errorf("failed to send run command: %w", err)
 	}
 
@@ -333,7 +370,7 @@ func (c *Client) RunInTerminal(id int64) error {
 	defer c.mu.Unlock()
 
 	// Send opt: terminal, id, run
-	if _, err := fmt.Fprintf(c.conn, "\"opt: terminal\n%d\nrun\n", id); err != nil {
+	if err := c.SendCommand("run", "opt: terminal", id); err != nil {
 		return fmt.Errorf("failed to send run command: %w", err)
 	}
 
