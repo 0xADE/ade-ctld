@@ -20,6 +20,7 @@ type Application struct {
 // Client handles connection to ade-exe-ctld server
 type Client struct {
 	conn   net.Conn
+	reader *bufio.Reader
 	mu     sync.Mutex
 	socket string
 }
@@ -46,6 +47,7 @@ func NewClient() (*Client, error) {
 
 	return &Client{
 		conn:   conn,
+		reader: bufio.NewReader(conn),
 		socket: socketPath,
 	}, nil
 }
@@ -119,7 +121,11 @@ func FormatArgument(arg any) string {
 func (c *Client) SendCommand(cmdName string, args ...any) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
+	return c.sendCommand(cmdName, args...)
+}
 
+// sendCommand is the internal version without locking
+func (c *Client) sendCommand(cmdName string, args ...any) error {
 	// Send arguments with type detection
 	for _, arg := range args {
 		formatted := FormatArgument(arg)
@@ -250,7 +256,7 @@ func (c *Client) ResetFilters() error {
 	defer c.mu.Unlock()
 
 	// Send reset filters command
-	if err := c.SendCommand("0filters"); err != nil {
+	if err := c.sendCommand("0filters"); err != nil {
 		return fmt.Errorf("failed to send reset filters command: %w", err)
 	}
 
@@ -299,7 +305,7 @@ func (c *Client) List() ([]Application, error) {
 	defer c.mu.Unlock()
 
 	// Send list command
-	if err := c.SendCommand("list"); err != nil {
+	if err := c.sendCommand("list"); err != nil {
 		return nil, fmt.Errorf("failed to send list command: %w", err)
 	}
 
@@ -346,7 +352,7 @@ func (c *Client) Run(id int64) error {
 	defer c.mu.Unlock()
 
 	// Send run command with id
-	if err := c.SendCommand("run", id); err != nil {
+	if err := c.sendCommand("run", id); err != nil {
 		return fmt.Errorf("failed to send run command: %w", err)
 	}
 
@@ -370,7 +376,7 @@ func (c *Client) RunInTerminal(id int64) error {
 	defer c.mu.Unlock()
 
 	// Send opt: terminal, id, run
-	if err := c.SendCommand("run", "opt: terminal", id); err != nil {
+	if err := c.sendCommand("run", "opt: terminal", id); err != nil {
 		return fmt.Errorf("failed to send run command: %w", err)
 	}
 
@@ -390,7 +396,7 @@ func (c *Client) RunInTerminal(id int64) error {
 
 // readResponse is a private method that returns parsed response
 func (c *Client) readResponse() (map[string]string, string, error) {
-	reader := bufio.NewReader(c.conn)
+	reader := c.reader
 
 	// Read header
 	header := make([]byte, 5)

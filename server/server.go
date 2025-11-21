@@ -196,7 +196,7 @@ func (s *Server) handleFilterNameReplace(conn net.Conn, cmd *parser.Command) {
 	}
 
 	// Send success response (returns filter-name as per spec)
-	attrs := "cmd: filter-name\nstatus: 0\n\n"
+	attrs := "cmd: filter-name\nstatus: 0\n\n\n"
 	s.writeResponse(conn, attrs)
 }
 
@@ -228,7 +228,7 @@ func (s *Server) handleAddFilterName(conn net.Conn, cmd *parser.Command) {
 	}
 
 	// Send success response
-	attrs := "cmd: +filter-name\nstatus: 0\n\n"
+	attrs := "cmd: +filter-name\nstatus: 0\n\n\n"
 	s.writeResponse(conn, attrs)
 }
 
@@ -257,7 +257,7 @@ func (s *Server) handleFilterCat(conn net.Conn, cmd *parser.Command) {
 	}
 
 	// Send success response
-	attrs := "cmd: +filter-cat\nstatus: 0\n\n"
+	attrs := "cmd: +filter-cat\nstatus: 0\n\n\n"
 	s.writeResponse(conn, attrs)
 }
 
@@ -286,7 +286,7 @@ func (s *Server) handleFilterPath(conn net.Conn, cmd *parser.Command) {
 	}
 
 	// Send success response
-	attrs := "cmd: +filter-path\nstatus: 0\n\n"
+	attrs := "cmd: +filter-path\nstatus: 0\n\n\n"
 	s.writeResponse(conn, attrs)
 }
 
@@ -299,7 +299,7 @@ func (s *Server) handleResetFilters(conn net.Conn) {
 	s.filters.pathFilters = []FilterExpr{}
 
 	// Send success response
-	attrs := "cmd: 0filters\nstatus: 0\n\n"
+	attrs := "cmd: 0filters\nstatus: 0\n\n\n"
 	s.writeResponse(conn, attrs)
 }
 
@@ -494,7 +494,7 @@ func (s *Server) handleRun(conn net.Conn, cmd *parser.Command) {
 	pid := execCmd.Process.Pid
 	log.Printf("[DEBUG] Command started successfully with PID: %d", pid)
 
-	attrs := fmt.Sprintf("cmd: run\nidx: %d\nstatus: 0\npid: %d\n\n", id, pid)
+	attrs := fmt.Sprintf("cmd: run\nidx: %d\nstatus: 0\npid: %d\n\n\n", id, pid)
 	s.writeResponse(conn, attrs)
 	log.Printf("[DEBUG] Run response sent")
 }
@@ -510,7 +510,7 @@ func (s *Server) handleLang(conn net.Conn, cmd *parser.Command) {
 	log.Printf("[DEBUG] Language set to: %s", s.lang)
 
 	// Send success response
-	attrs := fmt.Sprintf("cmd: lang\nstatus: 0\nlang: %s\n\n", s.lang)
+	attrs := fmt.Sprintf("cmd: lang\nstatus: 0\nlang: %s\n\n\n", s.lang)
 	s.writeResponse(conn, attrs)
 }
 
@@ -673,6 +673,6 @@ func (s *Server) writeResponse(conn net.Conn, response string) {
 
 func (s *Server) writeError(conn net.Conn, cmd, errType, desc string) {
 	log.Printf("[ERROR] Writing error response: cmd=%s, type=%s, desc=%s", cmd, errType, desc)
-	errorMsg := fmt.Sprintf("error-cmd: %s\nerror: %s\ndesc: %s\n\n", cmd, errType, desc)
+	errorMsg := fmt.Sprintf("error-cmd: %s\nerror: %s\ndesc: %s\n\n\n", cmd, errType, desc)
 	s.writeResponse(conn, errorMsg)
 }
