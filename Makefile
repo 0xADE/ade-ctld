@@ -33,6 +33,10 @@ build:
 test:
 	go tool ginkgo ./...
 
+.PHONY: test-integration
+test-integration: build
+	python3 tests/integration_test.py
+
 .PHONY: run
 run: build
 	./$(BINDIR)/ade-exe-ctld
