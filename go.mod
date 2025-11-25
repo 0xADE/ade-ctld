@@ -2,6 +2,8 @@ module github.com/0xADE/ade-ctld
 
 go 1.25.3
 
+replace github.com/0xADE/ade-ctld => ./
+
 require (
 	github.com/fsnotify/fsnotify v1.9.0
 	github.com/kelseyhightower/envconfig v1.4.0
@@ -200,6 +202,7 @@ require (
 	go-simpler.org/sloglint v0.11.1 // indirect
 	go.augendre.info/arangolint v0.3.1 // indirect
 	go.augendre.info/fatcontext v0.9.0 // indirect
+	go.etcd.io/bbolt v1.4.3 // indirect
 	go.uber.org/automaxprocs v1.6.0 // indirect
 	go.uber.org/multierr v1.10.0 // indirect
 	go.uber.org/zap v1.27.0 // indirect

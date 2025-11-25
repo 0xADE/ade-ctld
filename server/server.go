@@ -9,12 +9,14 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"sort"
 	"strings"
 	"sync"
 	"syscall"
 
 	"github.com/0xADE/ade-ctld/internal/config"
 	"github.com/0xADE/ade-ctld/internal/indexer"
+	"github.com/0xADE/ade-ctld/internal/runindex"
 	"github.com/0xADE/ade-ctld/parser"
 )
 
@@ -28,6 +30,7 @@ const (
 type Server struct {
 	listener net.Listener
 	indexer  *indexer.Indexer
+	runIndex *runindex.RunIndex
 	running  bool
 	mu       sync.RWMutex
 	filters  *Filters
@@ -67,9 +70,16 @@ func NewServer(idx *indexer.Indexer) (*Server, error) {
 		return nil, err
 	}
 
+	// Initialize run index
+	runIdx, err := runindex.NewRunIndex()
+	if err != nil {
+		return nil, fmt.Errorf("failed to initialize run index: %w", err)
+	}
+
 	return &Server{
 		listener: listener,
 		indexer:  idx,
+		runIndex: runIdx,
 		filters:  &Filters{},
 		lang:     "en",
 	}, nil
@@ -315,6 +325,9 @@ func (s *Server) handleList(conn net.Conn) {
 	filtered := s.filterEntries(allEntries)
 	s.filters.mu.RUnlock()
 
+	// Sort by run frequency (most frequent first)
+	s.sortByRunFrequency(filtered)
+
 	log.Printf("[DEBUG] Found %d entries after filtering (total: %d)", len(filtered), len(allEntries))
 
 	cfg := config.Get()
@@ -495,6 +508,11 @@ func (s *Server) handleRun(conn net.Conn, cmd *parser.Command) {
 
 	pid := execCmd.Process.Pid
 	log.Printf("[DEBUG] Command started successfully with PID: %d", pid)
+
+	// Update run frequency after successful execution
+	if err := s.runIndex.Increment(entry.Path); err != nil {
+		log.Printf("[WARN] Failed to update run frequency for %s: %v", entry.Path, err)
+	}
 
 	attrs := fmt.Sprintf("cmd: run\nidx: %d\nstatus: 0\npid: %d\n\n\n", id, pid)
 	s.writeResponse(conn, attrs)
@@ -734,4 +752,27 @@ func (s *Server) writeError(conn net.Conn, cmd, errType, desc string) {
 	log.Printf("[ERROR] Writing error response: cmd=%s, type=%s, desc=%s", cmd, errType, desc)
 	errorMsg := fmt.Sprintf("error-cmd: %s\nerror: %s\ndesc: %s\n\n\n", cmd, errType, desc)
 	s.writeResponse(conn, errorMsg)
+}
+
+// sortByRunFrequency sorts entries by run frequency in descending order (most frequent first)
+func (s *Server) sortByRunFrequency(entries []*indexer.Entry) {
+	// Collect all paths for batch frequency lookup
+	paths := make([]string, len(entries))
+	for i, entry := range entries {
+		paths[i] = entry.Path
+	}
+
+	// Get frequencies for all paths in one call
+	frequencies := s.runIndex.GetFrequencies(paths)
+
+	// Sort entries by frequency (descending), then by ID (ascending) for stable sort
+	sort.SliceStable(entries, func(i, j int) bool {
+		freqI := frequencies[entries[i].Path]
+		freqJ := frequencies[entries[j].Path]
+		if freqI != freqJ {
+			return freqI > freqJ // Higher frequency first
+		}
+		// If frequencies are equal, sort by ID for stable ordering
+		return entries[i].ID < entries[j].ID
+	})
 }
