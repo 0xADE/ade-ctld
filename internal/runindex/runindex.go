@@ -21,12 +21,23 @@ type RunIndex struct {
 	db *bbolt.DB
 }
 
+// For testing purposes - allow overriding the user cache directory
+var userCacheDirFunc = os.UserCacheDir
+
 // NewRunIndex creates or opens the bbolt database for the run index.
 func NewRunIndex() (*RunIndex, error) {
-	// Get cache directory
-	cacheDir, err := os.UserCacheDir()
-	if err != nil {
-		return nil, fmt.Errorf("failed to get user cache directory: %w", err)
+	return NewRunIndexWithCacheDir("")
+}
+
+// NewRunIndexWithCacheDir creates or opens the bbolt database for the run index with a specific cache directory.
+// This is primarily for testing purposes.
+func NewRunIndexWithCacheDir(cacheDir string) (*RunIndex, error) {
+	var err error
+	if cacheDir == "" {
+		cacheDir, err = userCacheDirFunc()
+		if err != nil {
+			return nil, fmt.Errorf("failed to get user cache directory: %w", err)
+		}
 	}
 
 	// Create ade directory in cache if it doesn't exist
