@@ -113,6 +113,7 @@ func parseCommand(line string) string {
 	line = strings.TrimSpace(line)
 
 	// Known commands
+	// reindex accepts arbitrary number of string path arguments
 	commands := []string{
 		"filter-name",
 		"+filter-name",
@@ -124,6 +125,7 @@ func parseCommand(line string) string {
 		"lang",
 		"saveconf",
 		"list-next",
+		"reindex",
 	}
 
 	for _, cmd := range commands {

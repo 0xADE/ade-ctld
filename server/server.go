@@ -160,6 +160,8 @@ func (s *Server) executeCommand(conn net.Conn, cmd *parser.Command) {
 		s.handleRun(conn, cmd)
 	case "lang":
 		s.handleLang(conn, cmd)
+	case "reindex":
+		s.handleReindex(conn, cmd)
 	default:
 		s.writeError(conn, cmd.Name, "unknown command", "Command not recognized")
 	}
@@ -512,6 +514,63 @@ func (s *Server) handleLang(conn net.Conn, cmd *parser.Command) {
 	// Send success response
 	attrs := fmt.Sprintf("cmd: lang\nstatus: 0\nlang: %s\n\n\n", s.lang)
 	s.writeResponse(conn, attrs)
+}
+
+func (s *Server) handleReindex(conn net.Conn, cmd *parser.Command) {
+	log.Printf("[DEBUG] Handling reindex command")
+
+	// Collect string arguments as paths
+	var paths []string
+	for _, arg := range cmd.Args {
+		if arg.Type != parser.TypeString {
+			log.Printf("[ERROR] reindex command received non-string argument")
+			s.writeError(conn, "reindex", "invalid argument", "reindex command accepts only string path arguments")
+			return
+		}
+		paths = append(paths, arg.Str)
+	}
+
+	// Expand paths (handle ~ and convert to absolute)
+	expandedPaths := make([]string, 0, len(paths))
+	for _, path := range paths {
+		expanded := s.expandPath(path)
+		absPath, err := filepath.Abs(expanded)
+		if err != nil {
+			log.Printf("[WARN] Failed to resolve absolute path for %s: %v", path, err)
+			// Use expanded path even if absolute resolution fails
+			expandedPaths = append(expandedPaths, expanded)
+		} else {
+			expandedPaths = append(expandedPaths, absPath)
+		}
+	}
+
+	log.Printf("[DEBUG] Reindexing paths: %v", expandedPaths)
+
+	// Perform reindexing (blocking call)
+	ctx := context.Background()
+	count, err := s.indexer.Reindex(ctx, expandedPaths)
+	if err != nil {
+		log.Printf("[ERROR] Reindex failed: %v", err)
+		s.writeError(conn, "reindex", "indexing failed", err.Error())
+		return
+	}
+
+	log.Printf("[DEBUG] Reindex completed, indexed %d entries", count)
+
+	// Send success response
+	attrs := fmt.Sprintf("cmd: reindex\nstatus: 0\nindexed: %d\n\n\n", count)
+	s.writeResponse(conn, attrs)
+}
+
+func (s *Server) expandPath(path string) string {
+	if strings.HasPrefix(path, "~") {
+		home, err := os.UserHomeDir()
+		if err != nil {
+			return path
+		}
+		return strings.Replace(path, "~", home, 1)
+	}
+	return path
 }
 
 func (s *Server) filterEntries(entries []*indexer.Entry) []*indexer.Entry {

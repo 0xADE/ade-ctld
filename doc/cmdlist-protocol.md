@@ -77,6 +77,11 @@ run
 
 *Returns:* cmd: run, idx: <application_id>, status: <execution_status>, pid: <process_id>
 
+### reindex
+*Arguments:* Optional arbitrary number of `<str>` arguments with paths.
+Starts reindexing of the executables in provided paths. When no any argument provided it just restarts indexing for all registered paths.
+*Returns:* cmd: reindex, status: 0, indexed: <total_count> (total number of indexed executables as integer)
+
 ### lang
 *Arguments:* isolang `<str>` (required)
 Set preferred language for returning localized results (for example, when selecting localizations returned from desktop files). The language code argument is passed as a string (with `"` prefix).

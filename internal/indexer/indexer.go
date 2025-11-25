@@ -11,9 +11,12 @@ import (
 
 // Indexer coordinates indexing of executables and desktop files
 type Indexer struct {
-	index   *Index
-	running bool
-	mu      sync.RWMutex
+	index      *Index
+	running    bool
+	mu         sync.RWMutex
+	indexCtx   context.Context
+	indexCancel context.CancelFunc
+	indexWg    sync.WaitGroup
 }
 
 // NewIndexer creates a new indexer instance
@@ -23,31 +26,65 @@ func NewIndexer() *Indexer {
 	}
 }
 
-// Start begins the indexing process
+// Start begins the indexing process using configured paths
 func (idx *Indexer) Start(ctx context.Context) error {
-	idx.mu.Lock()
-	if idx.running {
-		idx.mu.Unlock()
-		return nil
+	cfg := config.Get()
+	paths := cfg.Path()
+	return idx.runIndexing(ctx, paths)
+}
+
+// Reindex reindexes executables in the provided paths, or all registered paths if none provided
+// Returns the total number of indexed executables
+func (idx *Indexer) Reindex(ctx context.Context, paths []string) (int, error) {
+	var indexingPaths []string
+	if len(paths) > 0 {
+		indexingPaths = paths
+	} else {
+		cfg := config.Get()
+		indexingPaths = cfg.Path()
 	}
+
+	err := idx.runIndexing(ctx, indexingPaths)
+	if err != nil {
+		return 0, err
+	}
+
+	idx.mu.RLock()
+	count := idx.index.Count()
+	idx.mu.RUnlock()
+
+	return count, nil
+}
+
+// runIndexing performs the actual indexing work
+func (idx *Indexer) runIndexing(ctx context.Context, paths []string) error {
+	idx.mu.Lock()
+	// Cancel previous indexing if running
+	if idx.running && idx.indexCancel != nil {
+		idx.indexCancel()
+		idx.indexWg.Wait()
+	}
+
+	// Create new context for this indexing run
+	indexCtx, cancel := context.WithCancel(ctx)
+	idx.indexCtx = indexCtx
+	idx.indexCancel = cancel
 	idx.running = true
-	idx.mu.Unlock()
 
 	// Clear existing index
 	idx.index = NewIndex()
+	idx.mu.Unlock()
 
 	// Create channels for results
 	execChan := make(chan *executable.ExecutableInfo, 100)
 	desktopChan := make(chan *desktop.DesktopEntry, 100)
 
-	var wg sync.WaitGroup
+	idx.indexWg = sync.WaitGroup{}
 
 	// Start executable scanning
-	wg.Add(1)
+	idx.indexWg.Add(1)
 	go func() {
-		defer wg.Done()
-		cfg := config.Get()
-		paths := cfg.Path()
+		defer idx.indexWg.Done()
 		if err := executable.ScanPaths(paths, execChan); err != nil {
 			// Log error but continue
 			return
@@ -55,9 +92,9 @@ func (idx *Indexer) Start(ctx context.Context) error {
 	}()
 
 	// Start desktop file scanning
-	wg.Add(1)
+	idx.indexWg.Add(1)
 	go func() {
-		defer wg.Done()
+		defer idx.indexWg.Done()
 		if err := desktop.ScanDesktopFiles(desktopChan); err != nil {
 			// Log error but continue
 			return
@@ -65,14 +102,18 @@ func (idx *Indexer) Start(ctx context.Context) error {
 	}()
 
 	// Process results
-	wg.Add(1)
+	idx.indexWg.Add(1)
 	go func() {
-		defer wg.Done()
-		idx.processResults(ctx, execChan, desktopChan)
+		defer idx.indexWg.Done()
+		idx.processResults(indexCtx, execChan, desktopChan)
 	}()
 
-	// Channels are closed by ScanPaths and ScanDesktopFiles when they finish
-	// No need to close them here
+	// Wait for all scanning to complete
+	idx.indexWg.Wait()
+
+	idx.mu.Lock()
+	idx.running = false
+	idx.mu.Unlock()
 
 	return nil
 }
@@ -141,5 +182,9 @@ func (idx *Indexer) IsRunning() bool {
 func (idx *Indexer) Stop() {
 	idx.mu.Lock()
 	defer idx.mu.Unlock()
+	if idx.running && idx.indexCancel != nil {
+		idx.indexCancel()
+	}
 	idx.running = false
+	idx.indexWg.Wait()
 }
