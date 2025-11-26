@@ -88,6 +88,11 @@ func main() {
 			fmt.Fprintf(os.Stderr, "Failed to send command: %v\n", err)
 			os.Exit(1)
 		}
+	case "reindex":
+		if err := client.SendCommand("reindex", []string{os.Args[2]}); err != nil {
+			fmt.Fprintf(os.Stderr, "Failed to send command: %v\n", err)
+			os.Exit(1)
+		}
 	case "lang":
 		if len(os.Args) < 3 {
 			fmt.Fprintf(os.Stderr, "Usage: %s lang <locale>\n", os.Args[0])
