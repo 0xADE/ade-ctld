@@ -483,15 +483,8 @@ func (s *Server) handleRun(conn net.Conn, cmd *parser.Command) {
 		execCmd = exec.Command(term, "--hold", "-e", entry.Exec)
 		log.Printf("[DEBUG] Executing in terminal: %s -e %s", term, entry.Exec)
 	} else {
-		// Parse exec command
-		parts := strings.Fields(entry.Exec)
-		if len(parts) == 0 {
-			log.Printf("[ERROR] Empty exec command")
-			s.writeError(conn, "run", "invalid exec", "Empty exec command")
-			return
-		}
-		execCmd = exec.Command(parts[0], parts[1:]...)
-		log.Printf("[DEBUG] Executing: %v", parts)
+		execCmd = exec.Command(entry.Exec)
+		log.Printf("[DEBUG] Executing: %v", entry.Exec)
 	}
 
 	// Detach the process from the parent session to prevent terminal blocking

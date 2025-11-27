@@ -9,7 +9,6 @@
 # Variables
 APP=ade-ctld
 BINDIR=build
-
 PREFIX?=/usr/local/bin
 
 # Replace it with "sudo", "doas" or somethat, that allows root privileges on your
@@ -52,6 +51,13 @@ lint:
 .PHONY: tidy
 tidy:
 	go mod tidy
+
+# Build under regular user, only install under root!
+.PHONY: install
+install: build
+	@echo "Don't forget to set SUDO=sudo (or SUDO=doas) before this command!"
+	@echo "for example: SUDO=doas make install"
+	$(SUDO) install ./build/ade-exe-ctld $(PREFIX)
 
 .PHONY: sloc
 sloc:
